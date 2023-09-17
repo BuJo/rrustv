@@ -1,3 +1,5 @@
+use std::io::Write;
+use std::mem;
 use std::process::id;
 use crate::InstructionFormat::{I, R, S, B, U, J};
 
@@ -123,7 +125,7 @@ impl Machine {
                 match funct3 {
                     0x0 => {
                         // ADD immediate
-                        self.set_register(rd, self.get_register(rs1) + imm as u32)
+                        self.set_register(rd, ((self.get_register(rs1) as i64) + imm as i64) as u32)
                     }
                     _ => { todo!() }
                 }
@@ -220,90 +222,72 @@ impl Machine {
     }
 
     fn write_word(&mut self, idx: usize, word: u32) {
-        self.memory[idx + 0] = ((word >> 0) & 0xFF) as u8;
-        self.memory[idx + 1] = ((word >> 8) & 0xFF) as u8;
-        self.memory[idx + 2] = ((word >> 16) & 0xFF) as u8;
-        self.memory[idx + 3] = ((word >> 24) & 0xFF) as u8;
-        //println!("{:?}", self.memory);
+        self.memory.splice(idx..idx+4, u32::to_le_bytes(word));
     }
 
     fn fetch_instruction(&mut self) -> u32 {
-        let ins: u32 =
-            0 +
-                ((self.memory[(self.pc + 0) as usize] as u32) << 0) +
-                ((self.memory[(self.pc + 1) as usize] as u32) << 8) +
-                ((self.memory[(self.pc + 2) as usize] as u32) << 16) +
-                ((self.memory[(self.pc + 3) as usize] as u32) << 24);
-        //println!("{:#x} ", ins);
+        let idx = self.pc as usize;
+        let ins = u32::from_le_bytes(self.memory[idx..idx +4].try_into().unwrap());
         self.pc += 4;
         ins
     }
+
     fn decode_instruction(&self, instruction: u32) -> InstructionFormat {
         let opcode = (instruction & 0b1111111) as u8;
         match opcode {
             0b0110011 => {
-                println!("R-type");
+                println!("{:07b} R-type", opcode);
                 todo!();
             }
             0b0010011 | 0b0000011 => {
-                println!("I-type");
+                println!("{:07b} I-type", opcode);
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
                 let signed = (instruction >> 31) > 0;
-                println!("original: {}", instruction);
-                println!("signed: {}", ((instruction >> 20) & 0x800) > 0);
-                println!("value: {}", ((instruction >> 20) & 0x7FF));
-                println!("value: {}", ((instruction >> 20) as i16));
-                println!("value: {:b}", (instruction >> 20));
-                println!("value: {:b}", ((instruction >> 20) & 0x7FF));
-                let bits = ((instruction >> 20) & 0x7FF) as u16;
+                let bits = 0xF000 & (instruction >> 20) as u16;
                 let imm = if signed {
-                    println!("-1: {:b}", (-1i16 as u16));
-                    println!("&: {:b}", (-1i16 * bits as i16));
-                    println!("&: {:b}", (0xFFFF & bits));
-                    println!("&: {:b}", (0xF000 | bits));
-                    println!("&: {:b}", (0xF000 | bits));
-                    println!("&: {:b}", (-1i16 * bits as i16) as u16);
-                    (0xF000 | bits) as i16
+                    unsafe {
+                        *mem::transmute::<&u16, &i16>(&bits)
+                    }
                 } else {
                     bits as i16
                 };
-                println!("imm: {}: {:#x}, {:012b}", imm, imm, imm);
                 let ins = I { opcode, rd, funct3, rs1, imm };
                 ins
             }
             0b0100011 => {
-                println!("R-type");
+                println!("{:07b} R-type", opcode);
                 todo!();
             }
             0b1100011 => {
-                println!("B-type");
+                println!("{:07b} B-type", opcode);
                 todo!();
             }
             0b1101111 => {
-                println!("J-type");
+                println!("{:07b} J-type", opcode);
                 todo!();
             }
             0b1100111 => {
-                println!("I-type");
+                println!("{:07b} I-type", opcode);
                 todo!();
             }
             0b0110111 => {
-                println!("U-type");
+                println!("{:07b} U-type", opcode);
                 todo!();
             }
             0b0010111 => {
-                println!("U-type");
+                println!("{:07b} U-type", opcode);
                 let rd = ((instruction >> 7) & 0x1F) as u8;
                 let imm = (instruction >> 12) as i32;
                 U { opcode, rd, imm }
             }
             0b1110011 => {
-                println!("I-type");
+                println!("{:07b} I-type", opcode);
                 todo!();
             }
             _ => {
+                println!("{:07b} Unknown opcode", opcode);
                 panic!();
             }
         }
@@ -341,7 +325,6 @@ fn main() {
     m.tick();
     m.tick();
     m.tick();
-    m.tick();
 }
 
 
@@ -357,11 +340,9 @@ mod tests {
         m.write_word(0x08, 0xc1810193);
         m.write_word(0x0c, 0x83018213);
         m.write_word(0x10, 0x3e820293);
-        m.write_word(0x14, 0x00010317);
-        m.write_word(0x18, 0xfec30313);
-        m.write_word(0x1c, 0x00430313);
+        m.write_word(0x14, 0x04000313);
+        m.write_word(0x18, 0x00430313);
         m.write_word(0x40, 0xdeadbeef);
-        m.tick();
         m.tick();
         m.tick();
         m.tick();
