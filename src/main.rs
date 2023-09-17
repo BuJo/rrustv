@@ -1,7 +1,6 @@
-use std::io::Write;
 use std::mem;
-use std::process::id;
-use crate::InstructionFormat::{I, R, S, B, U, J};
+use std::mem::size_of;
+use crate::InstructionFormat::{I, U};
 
 struct Machine {
     memory: Vec<u8>,
@@ -76,8 +75,9 @@ struct Machine {
 
 impl Machine {
     fn new() -> Self {
-        let mut m = Machine {
-            memory: vec![0; 128],
+        let memory_size = 128;
+        let m = Machine {
+            memory: vec![0; memory_size],
             x0: 0,
             x1: 0,
             x2: 0,
@@ -120,18 +120,15 @@ impl Machine {
         let instruction = self.decode_instruction(instruction);
         println!("{:?}", instruction);
         match instruction {
-            R { .. } => {}
             I { rd, funct3, rs1, imm, .. } => {
                 match funct3 {
                     0x0 => {
                         // ADD immediate
-                        self.set_register(rd, ((self.get_register(rs1) as i64) + imm as i64) as u32)
+                        self.set_register(rd, (self.get_register(rs1).wrapping_add(imm as u32)))
                     }
                     _ => { todo!() }
                 }
             }
-            S { .. } => { todo!() }
-            B { .. } => { todo!() }
             U { opcode, rd, imm } => {
                 match opcode {
                     0b0010111 => {
@@ -141,7 +138,6 @@ impl Machine {
                     _ => { todo!() }
                 }
             }
-            J { .. } => { todo!() }
         }
     }
 
@@ -245,15 +241,9 @@ impl Machine {
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
                 let signed = (instruction >> 31) > 0;
-                let bits = 0xF000 & (instruction >> 20) as u16;
-                let imm = if signed {
-                    unsafe {
-                        *mem::transmute::<&u16, &i16>(&bits)
-                    }
-                } else {
-                    bits as i16
-                };
-                let ins = I { opcode, rd, funct3, rs1, imm };
+                let imm = ((instruction & 0xfff00000) as i32 as u64 >> 20) as i16;
+                println!("{} {:012b} = {} {:#x} {}", signed, rd, rs1, funct3, imm);
+                let ins = I { rd, funct3, rs1, imm };
                 ins
             }
             0b0100011 => {
@@ -294,43 +284,41 @@ impl Machine {
     }
 }
 
-type Register = u32;
-
 #[derive(Debug)]
 enum InstructionFormat {
-    R { opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8 },
-    I { opcode: u8, rd: u8, funct3: u8, rs1: u8, imm: i16 },
-    S { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
-    B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
+    //R { opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8 },
+    I { rd: u8, funct3: u8, rs1: u8, imm: i16 },
+    //S { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
+    //B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
     U { opcode: u8, rd: u8, imm: i32 },
-    J { opcode: u8, rd: u8, imm: i32 },
+    //J { opcode: u8, rd: u8, imm: i32 },
 }
 
 
 fn main() {
-    let mut m = Machine::new();
-    m.write_word(0x0000, 0x3e800093);
-    m.write_word(0x0004, 0x7d008113);
-    m.write_word(0x0008, 0xc1810193);
-    m.write_word(0x000c, 0x83018213);
-    m.write_word(0x0010, 0x3e820293);
-    m.write_word(0x0014, 0x00010317);
-    m.write_word(0x0018, 0xfec30313);
-    m.write_word(0x001c, 0x00430313);
-    m.write_word(0x007f, 0xdeadbeef);
-    m.tick();
-    m.tick();
-    m.tick();
-    m.tick();
-    m.tick();
-    m.tick();
-    m.tick();
+    let mut _m = Machine::new();
 }
 
 
 #[cfg(test)]
 mod tests {
     use crate::Machine;
+
+    #[test]
+    fn addi() {
+        let mut m = Machine::new();
+        m.write_word(0x00, 0x7d008113);
+        m.tick();
+        assert_eq!(m.x2, 2000, "x1 mismatch");
+    }
+
+    #[test]
+    fn addi_neg() {
+        let mut m = Machine::new();
+        m.write_word(0x00, 0xc1810193);
+        m.tick();
+        assert_eq!(m.x3 as i32, -1000, "x1 mismatch");
+    }
 
     #[test]
     fn it_works() {
@@ -355,6 +343,7 @@ mod tests {
         assert_eq!(m.x2, 3000, "x2 mismatch");
         assert_eq!(m.x3, 2000, "x3 mismatch");
         assert_eq!(m.x4, 0, "x4 mismatch");
-        assert_eq!(m.x5, 3735928563, "deadbeef");
+        assert_eq!(m.x5, 1000, "x5 mismatch");
+        assert_eq!(m.x6, 0x40+4, "deadbeef");
     }
 }
