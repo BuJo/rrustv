@@ -215,10 +215,6 @@ impl Machine {
         }
     }
 
-    fn write_word(&mut self, idx: usize, word: u32) {
-        self.memory.write_word(idx, word);
-    }
-
     fn fetch_instruction(&mut self) -> u32 {
         let ins = self.memory.read_word(self.pc as usize);
         self.pc += 4;

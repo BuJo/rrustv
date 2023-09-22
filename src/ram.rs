@@ -33,7 +33,6 @@ impl Ram {
 
 #[cfg(test)]
 mod tests {
-    use crate::Machine;
     use crate::ram::Ram;
 
     #[test]
@@ -42,5 +41,14 @@ mod tests {
         let i = ram.read_word(0);
 
         assert_eq!(i, 0x7d008113, "x1 mismatch");
+    }
+
+    #[test]
+    fn write_read_cycle() {
+        let mut ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        ram.write_word(0, 0xdeadbeef);
+        let i = ram.read_word(0);
+
+        assert_eq!(i, 0xdeadbeef, "dead beef");
     }
 }
