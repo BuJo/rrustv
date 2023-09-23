@@ -204,7 +204,7 @@ impl Machine {
     fn decode_instruction(&self, instruction: u32) -> InstructionFormat {
         let opcode = (instruction & 0b1111111) as u8;
         match opcode {
-            0b0110011 | 0b0100011 => {
+            0b0110011 => {
                 println!("{:07b} R-type", opcode);
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
@@ -221,13 +221,23 @@ impl Machine {
                 let imm = ((instruction & 0xfff00000) as i32 as u64 >> 20) as i16;
                 I { opcode, rd, funct3, rs1, imm }
             }
+            0b0100011 => {
+                println!("{:07b} S-type", opcode);
+                let funct3 = ((instruction >> 12) & 0b111) as u8;
+                let rs1 = ((instruction >> 15) & 0b1111) as u8;
+                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let imm7 = (instruction >> 7) & 0b11111;
+                let imm25 = instruction & 0xfff00000;
+                let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
+                S { opcode, funct3, rs1, rs2, imm }
+            }
             0b1100011 => {
                 println!("{:07b} B-type", opcode);
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
-                let imm7 = ((instruction >> 7) & 0b11111);
-                let imm25 = (instruction & 0xfff00000);
+                let imm7 = (instruction >> 7) & 0b11111;
+                let imm25 = instruction & 0xfff00000;
                 let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
                 B { opcode, funct3, rs1, rs2, imm }
             }
@@ -265,10 +275,16 @@ impl Machine {
                 let val = self.get_register(rs1).wrapping_add(imm as u32);
                 self.set_register(rd, val)
             }
+            // sb Store Byte
+            S { opcode: 0b0100011, funct3: 0x00, rs1, rs2, imm} => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.get_register(rs2 & 0xF) as u8;
+                self.memory.write_byte(addr, val)
+            }
             // beq Branch ==
             B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm} => {
-                if self.get_register(rs1) ==  self.get_register(rs1) {
-                    self.pc += imm
+                if self.get_register(rs1) ==  self.get_register(rs2) {
+                    self.pc += imm as u32
                 }
             }
             // auipc Add Upper Imm to PC

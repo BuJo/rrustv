@@ -19,6 +19,10 @@ impl Ram {
         self.ram[addr + 3] = ((word >> 24) & 0xFF) as u8;
     }
 
+    pub  fn write_byte(&mut self, addr: usize, val: u8) {
+        self.ram[addr] = val
+    }
+
     pub fn read_word(&mut self, addr: usize) -> u32 {
         let ins: u32 =
             0 +
