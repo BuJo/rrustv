@@ -38,7 +38,7 @@ pub fn call(registers: &mut [u32; 32]) {
         }
         (_, _) => {
             registers[SBI_ARG0_REG] = Error::NotSupported as u32;
-            println!("invalid syscall: {}", registers[SBI_SYSCALL_REG])
+            eprintln!("invalid syscall: {}", registers[SBI_SYSCALL_REG])
         }
     }
 }
