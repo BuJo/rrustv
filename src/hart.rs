@@ -1,3 +1,4 @@
+use std::{fmt, process};
 use InstructionFormat::{R, I, S, B, U, J};
 use crate::csr;
 use crate::see;
@@ -62,7 +63,6 @@ impl Hart {
     }
 
     fn set_register(&mut self, reg: u8, val: u32) {
-        eprintln!("{}: {} -> {}", reg, self.registers[reg as usize], val);
         match reg {
             0 => {}
             1..=31 => self.registers[reg as usize] = val,
@@ -87,7 +87,6 @@ impl Hart {
         let opcode = (instruction & 0b1111111) as u8;
         match opcode {
             0b0110011 => {
-                eprintln!("[{:#x}] {:07b} R-type", self.pc, opcode);
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
@@ -96,7 +95,6 @@ impl Hart {
                 R { opcode, rd, funct3, rs1, rs2, funct7 }
             }
             0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 => {
-                eprintln!("[{:#x}] {:07b} I-type", self.pc, opcode);
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
@@ -104,7 +102,6 @@ impl Hart {
                 I { opcode, rd, funct3, rs1, imm }
             }
             0b0100011 => {
-                eprintln!("[{:#x}] {:07b} S-type", self.pc, opcode);
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
@@ -114,7 +111,6 @@ impl Hart {
                 S { opcode, funct3, rs1, rs2, imm }
             }
             0b1100011 => {
-                eprintln!("[{:#x}] {:07b} B-type", self.pc, opcode);
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
@@ -124,13 +120,11 @@ impl Hart {
                 B { opcode, funct3, rs1, rs2, imm }
             }
             0b1101111 => {
-                eprintln!("[{:#x}] {:07b} J-type", self.pc, opcode);
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
                 J { opcode, rd, imm }
             }
             0b0110111 | 0b0010111 => {
-                eprintln!("[{:#x}] {:07b} U-type", self.pc, opcode);
                 let rd = ((instruction >> 7) & 0x1F) as u8;
                 let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
                 U { opcode, rd, imm }
@@ -144,7 +138,7 @@ impl Hart {
 
 
     fn execute_instruction(&mut self, instruction: InstructionFormat) {
-        eprintln!("{:?}", instruction);
+        eprintln!("[0x{:04x}] {}", self.pc, instruction);
 
         match instruction {
             // RV32I
@@ -180,13 +174,11 @@ impl Hart {
             // beq Branch ==
             B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm } => {
                 if self.get_register(rs1) == self.get_register(rs2) {
-                    eprintln!("current address: {}", self.pc);
-                    eprintln!("jump: {}", imm);
                     if imm > 0 {
-                        eprintln!("to: {}", self.pc.wrapping_add(imm as u32) - 4);
+                        // increment program counter, without the current address
                         self.pc = self.pc.wrapping_add(imm as u32) - 4
                     } else {
-                        eprintln!("to: {}", self.pc.wrapping_add(imm as u32) - 1 - 4);
+                        // decrement program counter, without current address and disregarding rmb
                         self.pc = self.pc.wrapping_add(imm as u32) - 1 - 4
                     }
                 }
@@ -207,8 +199,13 @@ impl Hart {
                 // We're unprivileged machine mode, no need to check SEDELEG
                 see::call(&mut self.registers);
             }
+            // ebreak Environment Break
+            I { opcode: 0b1110011, funct3: 0x0, imm: 0x1, .. } => {
+                // simply exit the program instead of dropping into the debugger
+                process::exit(0);
+            }
             _ => {
-                eprintln!("Unknown instruction: {:?}", instruction);
+                eprintln!("Unknown instruction: {:}", instruction);
                 todo!()
             }
         }
@@ -223,6 +220,31 @@ enum InstructionFormat {
     B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
     U { opcode: u8, rd: u8, imm: i32 },
     J { opcode: u8, rd: u8, imm: i32 },
+}
+
+impl fmt::Display for InstructionFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            R { opcode, rd, funct3, rs1, rs2, funct7 } => {
+                write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} 0x{:02x} ← 0x{:02x} · 0x{:02x}", opcode, funct3, funct7, rd, rs1, rs2)
+            }
+            I { opcode, rd, funct3, rs1, imm } => {
+                write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} ← 0x{:02x} · {}", opcode, funct3, rd, rs1, imm)
+            }
+            S { opcode, funct3, rs1, rs2, imm } => {
+                write!(f, "R 0b{:07b} 0x{:0x} M[0x{:02x}+{}] ← 0x{:02x}", opcode, funct3, rs1, imm, rs2)
+            }
+            B { opcode, funct3, rs1, rs2, imm } => {
+                write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} · 0x{:02x} → {}", opcode, funct3, rs1, rs2, imm)
+            }
+            U { opcode, rd, imm } => {
+                write!(f, "R 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
+            }
+            J { opcode, rd, imm } => {
+                 write!(f, "R 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
+            }
+        }
+    }
 }
 
 

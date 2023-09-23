@@ -1,5 +1,6 @@
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
+use std::io::{self, Write};
 
 use crate::see::Error::Success;
 
@@ -34,7 +35,8 @@ pub fn call(registers: &mut [u32; 32]) {
             registers[SBI_ARG1_REG] = spec_version;
         }
         (0x01, _) => {
-            print!("{}", char::from_u32(registers[SBI_ARG0_REG]).unwrap())
+            print!("{}", char::from_u32(registers[SBI_ARG0_REG]).unwrap());
+            io::stdout().flush().unwrap();
         }
         (_, _) => {
             registers[SBI_ARG0_REG] = Error::NotSupported as u32;

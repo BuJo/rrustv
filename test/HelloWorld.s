@@ -22,7 +22,7 @@ _loop:
   beq   x0, x0, _loop   # jump back in loop
 
 _out:
-  nop
+  ebreak
 
 .data
 helloworld:      .ascii "Hello World!\n"
