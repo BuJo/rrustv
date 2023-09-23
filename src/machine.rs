@@ -250,14 +250,24 @@ impl Machine {
         println!("{:?}", instruction);
 
         match instruction {
+            // RV32I
+
+            // ADD
+            R { opcode: 0b0110011, rd, funct3: 0x00, rs1, rs2, funct7: 0x00 } => {
+                let val = self.get_register(rs1).wrapping_add(self.get_register(rs2));
+                self.set_register(rd, val)
+            }
             // ADD immediate
             I { opcode: 0b0010011, rd, funct3: 0x00, rs1, imm } => {
-                self.set_register(rd, self.get_register(rs1).wrapping_add(imm as u32))
+                let val = self.get_register(rs1).wrapping_add(imm as u32);
+                self.set_register(rd, val)
             }
             // auipc Add Upper Imm to PC
             U { opcode: 0b0010111, rd, imm } => {
-                self.set_register(rd, self.pc + ((imm as u32) << 12))
+                let val = self.pc + ((imm as u32) << 12);
+                self.set_register(rd, val)
             }
+
             _ => {
                 println!("Unknown instruction: {:?}", instruction);
                 todo!()
