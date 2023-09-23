@@ -126,14 +126,14 @@ impl Hart {
             // lb Load Byte
             I {opcode: 0b0000011, rd, funct3: 0x0, rs1, imm} => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
-                let val = self.read_byte(addr);
+                let val = self.memory.read_byte(addr);
                 self.set_register(rd, val as u32)
             }
             // sb Store Byte
             S { opcode: 0b0100011, funct3: 0x00, rs1, rs2, imm } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2 & 0xF) as u8;
-                self.write_byte(addr, val)
+                self.memory.write_byte(addr, val)
             }
             // beq Branch ==
             B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm } => {
@@ -157,20 +157,6 @@ impl Hart {
                 todo!()
             }
         }
-    }
-
-    fn read_byte(&mut self, addr: usize) -> u8 {
-        self.memory.read_byte(addr)
-    }
-    fn read_word(&mut self, addr: usize) -> u32 {
-        self.memory.read_word(addr)
-    }
-
-    fn write_byte(&mut self, addr: usize, val: u8) {
-        self.memory.write_byte(addr, val)
-    }
-    fn write_word(&mut self, addr: usize, val: u32) {
-        self.memory.write_word(addr, val)
     }
 }
 
