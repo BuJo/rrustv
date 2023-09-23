@@ -1,5 +1,6 @@
 use InstructionFormat::{R, I, S, B, U, J};
 use crate::csr;
+use crate::see;
 use crate::ram::Ram;
 use crate::csr::Csr;
 
@@ -164,10 +165,16 @@ impl Hart {
                 self.set_register(rd, val as u32)
             }
             // sb Store Byte
-            S { opcode: 0b0100011, funct3: 0x00, rs1, rs2, imm } => {
+            S { opcode: 0b0100011, funct3: 0x0, rs1, rs2, imm } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2 & 0xF) as u8;
                 self.memory.write_byte(addr, val)
+            }
+            // sw Store Word
+            S { opcode: 0b0100011, funct3: 0x2, rs1, rs2, imm } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.get_register(rs2);
+                self.memory.write_word(addr, val)
             }
             // beq Branch ==
             B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm } => {
@@ -186,6 +193,11 @@ impl Hart {
                 self.set_register(rd, val)
             }
 
+            // ecall Environment Call
+            I { opcode: 0b1110011, funct3: 0x0, imm: 0x0, .. } => {
+                // We're unprivileged machine mode, no need to check SEDELEG
+                see::call(&mut self.registers);
+            }
             _ => {
                 println!("Unknown instruction: {:?}", instruction);
                 todo!()

@@ -12,6 +12,10 @@ impl Ram {
         Self { ram }
     }
 
+    pub fn write(&mut self, addr: usize, code: Vec<u8>) {
+        self.ram.splice(addr..(addr+code.len()), code.iter().cloned());
+    }
+
     pub fn write_word(&mut self, addr: usize, word: u32) {
         self.ram[addr + 0] = ((word >> 0) & 0xFF) as u8;
         self.ram[addr + 1] = ((word >> 8) & 0xFF) as u8;
