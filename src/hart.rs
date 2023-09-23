@@ -114,29 +114,35 @@ impl Hart {
             // RV32I
 
             // ADD
-            R { opcode: 0b0110011, rd, funct3: 0x00, rs1, rs2, funct7: 0x00 } => {
+            R { opcode: 0b0110011, rd, funct3: 0x0, rs1, rs2, funct7: 0x00 } => {
                 let val = self.get_register(rs1).wrapping_add(self.get_register(rs2));
                 self.set_register(rd, val)
             }
             // ADD immediate
-            I { opcode: 0b0010011, rd, funct3: 0x00, rs1, imm } => {
+            I { opcode: 0b0010011, rd, funct3: 0x0, rs1, imm } => {
                 let val = self.get_register(rs1).wrapping_add(imm as u32);
                 self.set_register(rd, val)
             }
+            // lb Load Byte
+            I {opcode: 0b0000011, rd, funct3: 0x0, rs1, imm} => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.memory.read_byte(addr);
+                self.set_register(rd, val as u32)
+            }
             // sb Store Byte
-            S { opcode: 0b0100011, funct3: 0x00, rs1, rs2, imm} => {
+            S { opcode: 0b0100011, funct3: 0x00, rs1, rs2, imm } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2 & 0xF) as u8;
                 self.memory.write_byte(addr, val)
             }
             // beq Branch ==
-            B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm} => {
-                if self.get_register(rs1) ==  self.get_register(rs2) {
+            B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm } => {
+                if self.get_register(rs1) == self.get_register(rs2) {
                     self.pc += imm as u32
                 }
             }
             // jal Jump And Link
-            J { opcode: 0b1101111, rd, imm} => {
+            J { opcode: 0b1101111, rd, imm } => {
                 self.set_register(rd, self.pc + 4);
                 self.pc += imm as u32
             }

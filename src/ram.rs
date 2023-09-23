@@ -19,7 +19,7 @@ impl Ram {
         self.ram[addr + 3] = ((word >> 24) & 0xFF) as u8;
     }
 
-    pub  fn write_byte(&mut self, addr: usize, val: u8) {
+    pub fn write_byte(&mut self, addr: usize, val: u8) {
         self.ram[addr] = val
     }
 
@@ -31,6 +31,10 @@ impl Ram {
                 ((self.ram[addr + 2] as u32) << 16) +
                 ((self.ram[addr + 3] as u32) << 24);
         ins
+    }
+
+    pub fn read_byte(&mut self, addr: usize) -> u8 {
+        self.ram[addr]
     }
 }
 
