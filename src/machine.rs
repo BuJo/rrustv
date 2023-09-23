@@ -116,23 +116,8 @@ impl Machine {
     pub(crate) fn tick(&mut self) {
         let instruction = self.fetch_instruction();
         let instruction = self.decode_instruction(instruction);
-        println!("{:?}", instruction);
-        match instruction {
-            I { opcode: 0b0010011, rd, funct3: 0x00, rs1, imm } => {
-                // ADD immediate
-                self.set_register(rd, self.get_register(rs1).wrapping_add(imm as u32))
-            }
-            U { opcode: 0b0010111, rd, imm } => {
-                // auipc Add Upper Imm to PC
-                self.set_register(rd, self.pc + ((imm as u32) << 12))
-            }
-            _ => {
-                println!("Unknown instruction: {:?}", instruction);
-                todo!()
-            }
-        }
+        self.execute_instruction(instruction);
     }
-
 
     fn set_register(&mut self, reg: u8, val: u32) {
         match reg {
@@ -256,6 +241,26 @@ impl Machine {
             _ => {
                 println!("{:07b} Unknown opcode", opcode);
                 panic!();
+            }
+        }
+    }
+
+
+    fn execute_instruction(&mut self, instruction: InstructionFormat) {
+        println!("{:?}", instruction);
+
+        match instruction {
+            // ADD immediate
+            I { opcode: 0b0010011, rd, funct3: 0x00, rs1, imm } => {
+                self.set_register(rd, self.get_register(rs1).wrapping_add(imm as u32))
+            }
+            // auipc Add Upper Imm to PC
+            U { opcode: 0b0010111, rd, imm } => {
+                self.set_register(rd, self.pc + ((imm as u32) << 12))
+            }
+            _ => {
+                println!("Unknown instruction: {:?}", instruction);
+                todo!()
             }
         }
     }
