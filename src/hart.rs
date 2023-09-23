@@ -1,22 +1,52 @@
 use InstructionFormat::{R, I, S, B, U, J};
+use crate::csr;
 use crate::ram::Ram;
+use crate::csr::Csr;
+
+const XLEN: usize = 32;
 
 pub struct Hart {
     memory: Ram,
-
-    // Registers
     registers: [u32; 32],
-    // t6:
     pc: u32,
+    csr: Csr,
 }
 
 impl Hart {
     pub(crate) fn new(ram: Ram) -> Self {
-        let m = Hart {
+        let mut m = Hart {
             memory: ram,
             registers: [0; 32],
             pc: 0,
+            csr: Csr::new(),
         };
+
+        // RV32 I
+        m.csr[csr::MISA] =
+            0b01 << XLEN - 2 |
+                1 << 8;
+        m.csr[csr::MEDELEG] = 0;
+
+        // Non-commercial implementation
+        m.csr[csr::MVENDORID] = 0;
+
+        // Open-Source project, unregistered
+        m.csr[csr::MARCHID] = 0 << XLEN - 1 |
+            0;
+
+        // Version
+        m.csr[csr::MIMPID] = 1;
+
+        // Cycle counters
+        m.csr[csr::MCYCLE] = 0;  // actually per core, not hart
+        m.csr[csr::MINSTRET] = 0;
+
+        // Current hart
+        m.csr[csr::MHARTID] = 0;
+
+        // Status
+        m.csr[csr::MSTATUS] = 0;
+
         m
     }
 
@@ -24,6 +54,10 @@ impl Hart {
         let instruction = self.fetch_instruction();
         let instruction = self.decode_instruction(instruction);
         self.execute_instruction(instruction);
+
+        // simulate passing of time
+        self.csr[csr::MCYCLE] += 3;
+        self.csr[csr::MINSTRET] += 1;
     }
 
     fn set_register(&mut self, reg: u8, val: u32) {
@@ -124,7 +158,7 @@ impl Hart {
                 self.set_register(rd, val)
             }
             // lb Load Byte
-            I {opcode: 0b0000011, rd, funct3: 0x0, rs1, imm} => {
+            I { opcode: 0b0000011, rd, funct3: 0x0, rs1, imm } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.memory.read_byte(addr);
                 self.set_register(rd, val as u32)

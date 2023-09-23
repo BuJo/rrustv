@@ -1,5 +1,6 @@
 mod hart;
 mod ram;
+mod csr;
 
 use crate::hart::Hart;
 use crate::ram::Ram;
