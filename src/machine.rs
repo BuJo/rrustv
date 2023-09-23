@@ -118,26 +118,21 @@ impl Machine {
         let instruction = self.decode_instruction(instruction);
         println!("{:?}", instruction);
         match instruction {
-            I { rd, funct3, rs1, imm, .. } => {
-                match funct3 {
-                    0x0 => {
-                        // ADD immediate
-                        self.set_register(rd, self.get_register(rs1).wrapping_add(imm as u32))
-                    }
-                    _ => { todo!() }
-                }
+            I { opcode: 0b0010011, rd, funct3: 0x00, rs1, imm } => {
+                // ADD immediate
+                self.set_register(rd, self.get_register(rs1).wrapping_add(imm as u32))
             }
-            U { opcode, rd, imm } => {
-                match opcode {
-                    0b0010111 => {
-                        // auipc Add Upper Imm to PC
-                        self.set_register(rd, self.pc + ((imm as u32) << 12))
-                    }
-                    _ => { todo!() }
-                }
+            U { opcode: 0b0010111, rd, imm } => {
+                // auipc Add Upper Imm to PC
+                self.set_register(rd, self.pc + ((imm as u32) << 12))
+            }
+            _ => {
+                println!("Unknown instruction: {:?}", instruction);
+                todo!()
             }
         }
     }
+
 
     fn set_register(&mut self, reg: u8, val: u32) {
         match reg {
