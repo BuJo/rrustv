@@ -5,69 +5,7 @@ pub struct Machine {
     memory: Ram,
 
     // Registers
-    x0: u32,
-    // zero : Hard-wired zero
-    x1: u32,
-    // ra : Return address
-    x2: u32,
-    // sp: Stack Pointer
-    x3: u32,
-    // gp: Global Pointer
-    x4: u32,
-    // tp: Thread Pointer
-    x5: u32,
-    // t0: Temporaries
-    x6: u32,
-    // t1: Temporaries
-    x7: u32,
-    // t2: Temporaries
-    x8: u32,
-    // s0/fp: Saved Register/Frame Pointer
-    x9: u32,
-    // s1: Saved Register
-    x10: u32,
-    // a0: Function arguments/return values
-    x11: u32,
-    // a1:
-    x12: u32,
-    // a2: Function arguments
-    x13: u32,
-    // a3:
-    x14: u32,
-    // a4:
-    x15: u32,
-    // a5:
-    x16: u32,
-    // a6:
-    x17: u32,
-    // a7:
-    x18: u32,
-    // s2: Saved registers
-    x19: u32,
-    // s3:
-    x20: u32,
-    // s4:
-    x21: u32,
-    // s5:
-    x22: u32,
-    // s6:
-    x23: u32,
-    // s7:
-    x24: u32,
-    // s8:
-    x25: u32,
-    // s9:
-    x26: u32,
-    // s10:
-    x27: u32,
-    // s11:
-    x28: u32,
-    // t3: Temporaries
-    x29: u32,
-    // t4:
-    x30: u32,
-    // t5:
-    x31: u32,
+    registers: [u32; 32],
     // t6:
     pc: u32,
 }
@@ -76,38 +14,7 @@ impl Machine {
     pub(crate) fn new(ram: Ram) -> Self {
         let m = Machine {
             memory: ram,
-            x0: 0,
-            x1: 0,
-            x2: 0,
-            x3: 0,
-            x4: 0,
-            x5: 0,
-            x6: 0,
-            x7: 0,
-            x8: 0,
-            x9: 0,
-            x10: 0,
-            x11: 0,
-            x12: 0,
-            x13: 0,
-            x14: 0,
-            x15: 0,
-            x16: 0,
-            x17: 0,
-            x18: 0,
-            x19: 0,
-            x20: 0,
-            x21: 0,
-            x22: 0,
-            x23: 0,
-            x24: 0,
-            x25: 0,
-            x26: 0,
-            x27: 0,
-            x28: 0,
-            x29: 0,
-            x30: 0,
-            x31: 0,
+            registers: [0; 32],
             pc: 0,
         };
         m
@@ -122,75 +29,14 @@ impl Machine {
     fn set_register(&mut self, reg: u8, val: u32) {
         match reg {
             0 => { panic!() }
-            1 => self.x1 = val,
-            2 => self.x2 = val,
-            3 => self.x3 = val,
-            4 => self.x4 = val,
-            5 => self.x5 = val,
-            6 => self.x6 = val,
-            7 => self.x7 = val,
-            8 => self.x8 = val,
-            9 => self.x9 = val,
-            10 => self.x10 = val,
-            11 => self.x11 = val,
-            12 => self.x12 = val,
-            13 => self.x13 = val,
-            14 => self.x14 = val,
-            15 => self.x15 = val,
-            16 => self.x16 = val,
-            17 => self.x17 = val,
-            18 => self.x18 = val,
-            19 => self.x19 = val,
-            20 => self.x20 = val,
-            21 => self.x21 = val,
-            22 => self.x22 = val,
-            23 => self.x23 = val,
-            24 => self.x24 = val,
-            25 => self.x25 = val,
-            26 => self.x26 = val,
-            27 => self.x27 = val,
-            28 => self.x28 = val,
-            29 => self.x29 = val,
-            30 => self.x30 = val,
-            31 => self.x31 = val,
+            1..=31 => self.registers[reg as usize] = val,
             _ => { panic!() }
         }
     }
 
     fn get_register(&self, reg: u8) -> u32 {
         match reg {
-            0 => self.x0,
-            1 => self.x1,
-            2 => self.x2,
-            3 => self.x3,
-            4 => self.x4,
-            5 => self.x5,
-            6 => self.x6,
-            7 => self.x7,
-            8 => self.x8,
-            9 => self.x9,
-            10 => self.x10,
-            11 => self.x11,
-            12 => self.x12,
-            13 => self.x13,
-            14 => self.x14,
-            15 => self.x15,
-            16 => self.x16,
-            17 => self.x17,
-            18 => self.x18,
-            19 => self.x19,
-            20 => self.x20,
-            21 => self.x21,
-            22 => self.x22,
-            23 => self.x23,
-            24 => self.x24,
-            25 => self.x25,
-            26 => self.x26,
-            27 => self.x27,
-            28 => self.x28,
-            29 => self.x29,
-            30 => self.x30,
-            31 => self.x31,
+            0..=31 => self.registers[reg as usize],
             _ => { panic!() }
         }
     }
@@ -329,7 +175,7 @@ mod tests {
         let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
         let mut m = Machine::new(ram);
         m.tick();
-        assert_eq!(m.x2, 2000, "x1 mismatch");
+        assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
 
     #[test]
@@ -337,7 +183,7 @@ mod tests {
         let ram = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
         let mut m = Machine::new(ram);
         m.tick();
-        assert_eq!(m.x3 as i32, -1000, "x1 mismatch");
+        assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
 
     #[test]
@@ -366,12 +212,12 @@ mod tests {
         m.tick();
         m.tick();
         m.tick();
-        assert_eq!(m.x0, 0, "zero register must be zero");
-        assert_eq!(m.x1, 1000, "x1 mismatch");
-        assert_eq!(m.x2, 3000, "x2 mismatch");
-        assert_eq!(m.x3, 2000, "x3 mismatch");
-        assert_eq!(m.x4, 0, "x4 mismatch");
-        assert_eq!(m.x5, 1000, "x5 mismatch");
-        assert_eq!(m.x6, 0x40 + 4, "deadbeef");
+        assert_eq!(m.get_register(0), 0, "zero register must be zero");
+        assert_eq!(m.get_register(1), 1000, "x1 mismatch");
+        assert_eq!(m.get_register(2), 3000, "x2 mismatch");
+        assert_eq!(m.get_register(3), 2000, "x3 mismatch");
+        assert_eq!(m.get_register(4), 0, "x4 mismatch");
+        assert_eq!(m.get_register(5), 1000, "x5 mismatch");
+        assert_eq!(m.get_register(6), 0x40 + 4, "deadbeef");
     }
 }
