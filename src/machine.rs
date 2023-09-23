@@ -1,4 +1,4 @@
-use InstructionFormat::{R, I, U};
+use InstructionFormat::{R, I, S, B, U, J};
 use crate::ram::Ram;
 
 pub struct Machine {
@@ -218,15 +218,18 @@ impl Machine {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
-                let signed = (instruction >> 31) > 0;
                 let imm = ((instruction & 0xfff00000) as i32 as u64 >> 20) as i16;
-                println!("{} {:012b} = {} {:#x} {}", signed, rd, rs1, funct3, imm);
-                let ins = I { opcode, rd, funct3, rs1, imm };
-                ins
+                I { opcode, rd, funct3, rs1, imm }
             }
             0b1100011 => {
                 println!("{:07b} B-type", opcode);
-                todo!();
+                let funct3 = ((instruction >> 12) & 0b111) as u8;
+                let rs1 = ((instruction >> 15) & 0b1111) as u8;
+                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let imm7 = ((instruction >> 7) & 0b11111);
+                let imm25 = (instruction & 0xfff00000);
+                let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
+                B { opcode, funct3, rs1, rs2, imm }
             }
             0b1101111 => {
                 println!("{:07b} J-type", opcode);
@@ -262,6 +265,12 @@ impl Machine {
                 let val = self.get_register(rs1).wrapping_add(imm as u32);
                 self.set_register(rd, val)
             }
+            // beq Branch ==
+            B { opcode: 0b1100011, funct3: 0x00, rs1, rs2, imm} => {
+                if self.get_register(rs1) ==  self.get_register(rs1) {
+                    self.pc += imm
+                }
+            }
             // auipc Add Upper Imm to PC
             U { opcode: 0b0010111, rd, imm } => {
                 let val = self.pc + ((imm as u32) << 12);
@@ -280,10 +289,10 @@ impl Machine {
 enum InstructionFormat {
     R { opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8 },
     I { opcode: u8, rd: u8, funct3: u8, rs1: u8, imm: i16 },
-    //S { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
-    //B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
+    S { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
+    B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
     U { opcode: u8, rd: u8, imm: i32 },
-    //J { opcode: u8, rd: u8, imm: i32 },
+    J { opcode: u8, rd: u8, imm: i32 },
 }
 
 
