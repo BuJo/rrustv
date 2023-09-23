@@ -1,4 +1,4 @@
-use InstructionFormat::{I, U};
+use InstructionFormat::{R, I, U};
 use crate::ram::Ram;
 
 pub struct Machine {
@@ -224,11 +224,16 @@ impl Machine {
     fn decode_instruction(&self, instruction: u32) -> InstructionFormat {
         let opcode = (instruction & 0b1111111) as u8;
         match opcode {
-            0b0110011 => {
+            0b0110011 | 0b0100011 => {
                 println!("{:07b} R-type", opcode);
-                todo!();
+                let rd = ((instruction >> 7) & 0b11111) as u8;
+                let funct3 = ((instruction >> 12) & 0b111) as u8;
+                let rs1 = ((instruction >> 15) & 0b1111) as u8;
+                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let funct7 = (instruction >> 25) as u8;
+                R { opcode, rd, funct3, rs1, rs2, funct7 }
             }
-            0b0010011 | 0b0000011 => {
+            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 => {
                 println!("{:07b} I-type", opcode);
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
@@ -236,12 +241,8 @@ impl Machine {
                 let signed = (instruction >> 31) > 0;
                 let imm = ((instruction & 0xfff00000) as i32 as u64 >> 20) as i16;
                 println!("{} {:012b} = {} {:#x} {}", signed, rd, rs1, funct3, imm);
-                let ins = I { rd, funct3, rs1, imm };
+                let ins = I { opcode, rd, funct3, rs1, imm };
                 ins
-            }
-            0b0100011 => {
-                println!("{:07b} R-type", opcode);
-                todo!();
             }
             0b1100011 => {
                 println!("{:07b} B-type", opcode);
@@ -251,23 +252,11 @@ impl Machine {
                 println!("{:07b} J-type", opcode);
                 todo!();
             }
-            0b1100111 => {
-                println!("{:07b} I-type", opcode);
-                todo!();
-            }
-            0b0110111 => {
-                println!("{:07b} U-type", opcode);
-                todo!();
-            }
-            0b0010111 => {
+            0b0110111 | 0b0010111 => {
                 println!("{:07b} U-type", opcode);
                 let rd = ((instruction >> 7) & 0x1F) as u8;
                 let imm = (instruction >> 12) as i32;
                 U { opcode, rd, imm }
-            }
-            0b1110011 => {
-                println!("{:07b} I-type", opcode);
-                todo!();
             }
             _ => {
                 println!("{:07b} Unknown opcode", opcode);
@@ -279,8 +268,8 @@ impl Machine {
 
 #[derive(Debug)]
 enum InstructionFormat {
-    //R { opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8 },
-    I { rd: u8, funct3: u8, rs1: u8, imm: i16 },
+    R { opcode: u8, rd: u8, funct3: u8, rs1: u8, rs2: u8, funct7: u8 },
+    I { opcode: u8, rd: u8, funct3: u8, rs1: u8, imm: i16 },
     //S { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
     //B { opcode: u8, funct3: u8, rs1: u8, rs2: u8, imm: i16 },
     U { opcode: u8, rd: u8, imm: i32 },
