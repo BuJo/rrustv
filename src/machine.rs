@@ -243,12 +243,14 @@ impl Machine {
             }
             0b1101111 => {
                 println!("{:07b} J-type", opcode);
-                todo!();
+                let rd = ((instruction & 0x0F80) >> 7) as u8;
+                let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
+                J { opcode, rd, imm }
             }
             0b0110111 | 0b0010111 => {
                 println!("{:07b} U-type", opcode);
                 let rd = ((instruction >> 7) & 0x1F) as u8;
-                let imm = (instruction >> 12) as i32;
+                let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
                 U { opcode, rd, imm }
             }
             _ => {
@@ -286,6 +288,11 @@ impl Machine {
                 if self.get_register(rs1) ==  self.get_register(rs2) {
                     self.pc += imm as u32
                 }
+            }
+            // jal Jump And Link
+            J { opcode: 0b1101111, rd, imm} => {
+                self.set_register(rd, self.pc + 4);
+                self.pc += imm as u32
             }
             // auipc Add Upper Imm to PC
             U { opcode: 0b0010111, rd, imm } => {
