@@ -1,7 +1,7 @@
-mod machine;
+mod hart;
 mod ram;
 
-use crate::machine::Machine;
+use crate::hart::Hart;
 use crate::ram::Ram;
 
 
@@ -24,7 +24,7 @@ fn main() {
     ]);
     ram.write_word(0x40, 0xdeadbeef);
 
-    let mut m = Machine::new(ram);
+    let mut m = Hart::new(ram);
     m.tick();
     m.tick();
     m.tick();

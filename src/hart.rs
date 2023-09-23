@@ -1,7 +1,7 @@
 use InstructionFormat::{R, I, S, B, U, J};
 use crate::ram::Ram;
 
-pub struct Machine {
+pub struct Hart {
     memory: Ram,
 
     // Registers
@@ -10,9 +10,9 @@ pub struct Machine {
     pc: u32,
 }
 
-impl Machine {
+impl Hart {
     pub(crate) fn new(ram: Ram) -> Self {
-        let m = Machine {
+        let m = Hart {
             memory: ram,
             registers: [0; 32],
             pc: 0,
@@ -167,13 +167,13 @@ enum InstructionFormat {
 
 #[cfg(test)]
 mod tests {
-    use crate::Machine;
+    use crate::Hart;
     use crate::ram::Ram;
 
     #[test]
     fn addi() {
         let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let mut m = Machine::new(ram);
+        let mut m = Hart::new(ram);
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn addi_neg() {
         let ram = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
-        let mut m = Machine::new(ram);
+        let mut m = Hart::new(ram);
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
@@ -204,7 +204,7 @@ mod tests {
             // addi	t1,t1,4
             0x13, 0x03, 0x43, 0x00,
         ]);
-        let mut m = Machine::new(ram);
+        let mut m = Hart::new(ram);
         m.tick();
         m.tick();
         m.tick();
