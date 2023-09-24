@@ -1,9 +1,9 @@
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 pub const DRAM_SIZE: usize = 1024 * 1024 * 128; // 128MiB
 
 pub struct Ram {
-    pub ram: Mutex<Vec<u8>>,
+    pub ram: RwLock<Vec<u8>>,
 }
 
 impl Ram {
@@ -11,17 +11,17 @@ impl Ram {
         let mut ram = vec![0; DRAM_SIZE];
         ram.splice(..code.len(), code.iter().cloned());
 
-        Self { ram: Mutex::new(ram) }
+        Self { ram: RwLock::new(ram) }
     }
 
     pub fn write(&self, addr: usize, code: Vec<u8>) {
-        let mut shared = self.ram.lock().unwrap();
+        let mut shared = self.ram.write().unwrap();
 
         shared.splice(addr..(addr + code.len()), code.iter().cloned());
     }
 
     pub fn write_word(&self, addr: usize, word: u32) {
-        let mut shared = self.ram.lock().unwrap();
+        let mut shared = self.ram.write().unwrap();
 
         shared[addr + 0] = ((word >> 0) & 0xFF) as u8;
         shared[addr + 1] = ((word >> 8) & 0xFF) as u8;
@@ -30,13 +30,13 @@ impl Ram {
     }
 
     pub fn write_byte(&self, addr: usize, val: u8) {
-        let mut shared = self.ram.lock().unwrap();
+        let mut shared = self.ram.write().unwrap();
 
         shared[addr] = val
     }
 
     pub fn read_word(&self, addr: usize) -> u32 {
-        let shared = self.ram.lock().unwrap();
+        let shared = self.ram.read().unwrap();
 
         let ins: u32 =
             0 +
@@ -48,7 +48,7 @@ impl Ram {
     }
 
     pub fn read_byte(&self, addr: usize) -> u8 {
-        let shared = self.ram.lock().unwrap();
+        let shared = self.ram.read().unwrap();
 
         //eprintln!("reading byte: {} at addr 0x{:04x}", self.ram[addr], addr);
         shared[addr]
