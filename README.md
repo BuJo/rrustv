@@ -2,6 +2,28 @@
 
 This project aims to provide a learning platform for RISC-V and Rust.
 
+```mermaid
+flowchart LR
+
+
+hart[HART] --> ram(RAM)
+hart --> csr(CSR)
+hart -->|SBI| see[SEE]
+see -..-> hart
+```
+
+### Glossary
+
+|      | Definition                       |
+|------|----------------------------------|
+| HART | Hardware Thread                  |
+| CSR  | Control and Status Registers     |
+| SBI  | Supervisor Binary Interface      |
+| SEE  | Supervisor Execution Environment |
+| ISA  | Instruction Set Architecture     |
+| M    | Machine Mode                     |
+| XLEN | RISC-V 32 or 64 flavour          |
+
 ## Development
 
 ```
