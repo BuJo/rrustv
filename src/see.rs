@@ -1,18 +1,37 @@
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
 use std::io::{self, Write};
-
-use crate::see::Error::Success;
+use std::ops::{Index, IndexMut};
 
 const SBI_VERSION: (u32, u32) = (1, 0);
 
-pub const SBI_ARG0_REG: usize = 10; // a0 (Error Code)
-pub const SBI_ARG1_REG: usize = 11; // a1 (Value)
-pub const SBI_FUNCTION_REG: usize = 17; // FID: a6 (Function ID)
-pub const SBI_SYSCALL_REG: usize = 17; // EID: a7 (Extension ID)
+#[allow(dead_code)]
+enum Register {
+    // a0: (Error Code)
+    ARG0 = 10,
+    // a1 (Value)
+    ARG1 = 11,
+    // FID: a6 (Function ID)
+    FID = 16,
+    // EID: a7 (Extension ID)
+    EID = 17,
+}
+
+impl Index<Register> for [u32; 32] {
+    type Output = u32;
+
+    fn index(&self, idx: Register) -> &Self::Output {
+        &self[idx as usize]
+    }
+}
+impl IndexMut<Register> for [u32; 32] {
+    fn index_mut(&mut self, idx: Register) -> &mut Self::Output {
+        &mut self[idx as usize]
+    }
+}
 
 #[allow(dead_code)]
-pub enum Error {
+enum Error {
     Success = 0,
     Failed = -1,
     NotSupported = -2,
@@ -25,22 +44,21 @@ pub enum Error {
 }
 
 pub fn call(registers: &mut [u32; 32]) {
-
-    let func = (registers[SBI_SYSCALL_REG], registers[SBI_FUNCTION_REG]);
+    let func = (registers[Register::EID], registers[Register::FID]);
 
     match func {
         (0x10, 0x0) => {
             let spec_version: u32 = SBI_VERSION.0 << 24 + SBI_VERSION.1;
-            registers[SBI_ARG0_REG] = Success as u32;
-            registers[SBI_ARG1_REG] = spec_version;
+            registers[Register::ARG0] = Error::Success as u32;
+            registers[Register::ARG1] = spec_version;
         }
         (0x01, _) => {
-            print!("{}", char::from_u32(registers[SBI_ARG0_REG]).unwrap());
+            print!("{}", char::from_u32(registers[Register::ARG0]).unwrap());
             io::stdout().flush().unwrap();
         }
-        (_, _) => {
-            registers[SBI_ARG0_REG] = Error::NotSupported as u32;
-            eprintln!("invalid syscall: {}", registers[SBI_SYSCALL_REG])
+        (eid, fid) => {
+            registers[Register::ARG0] = Error::NotSupported as u32;
+            eprintln!("invalid syscall: {}/{}", eid, fid)
         }
     }
 }
