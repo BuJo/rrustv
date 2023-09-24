@@ -2,7 +2,7 @@
 // RISC-V SBI (Supervisor Binary Interface)
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
-use std::process;
+
 use crate::hart;
 
 const SBI_VERSION: (u32, u32) = (1, 0);
@@ -99,8 +99,11 @@ fn sbi_get_mimpid() -> Result<u32, Error> {
 
 fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
     let char = [u8::try_from(value)?];
-    io::stdout().write_all(&char)?;
-    io::stdout().flush()?;
+
+    let mut handle = io::stdout().lock();
+
+    handle.write(&char)?;
+    handle.flush()?;
     Ok(0)
 }
 
@@ -110,8 +113,9 @@ fn sbi_console_getchar() -> Result<u32, Error> {
     Ok(buffer[0] as u32)
 }
 
-fn sbi_shutdown() -> ! {
-    process::exit(0);
+fn sbi_shutdown(hart: &mut hart::Hart) -> Result<u32, Error> {
+    hart.stop();
+    Ok(0)
 }
 
 // System Reset Extension (EID #0x53525354 "SRST")
@@ -131,7 +135,8 @@ fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u32, reset_reason: u32) -
     match reset_type {
         0x00000000 => {
             eprintln!("Shutting down: {}: {}", reset_reason, reason);
-            process::exit(0)
+            hart.stop();
+            Ok(0)
         }
         0x00000001 => {
             eprintln!("Cold reboot: {}: {}", reset_reason, reason);
@@ -155,7 +160,7 @@ fn call_0_1(hart: &mut hart::Hart) {
     let result = match func {
         0x01 => sbi_console_putchar(hart.get_register(Register::ARG0 as u8)),
         0x02 => sbi_console_getchar(),
-        0x08 => sbi_shutdown(),
+        0x08 => sbi_shutdown(hart),
         _ => Err(Error::NotSupported),
     };
 
@@ -181,7 +186,9 @@ fn call_0_2(hart: &mut hart::Hart) {
         (0x10, 0x4) => sbi_get_mvendorid(),
         (0x10, 0x5) => sbi_get_marchid(),
         (0x10, 0x6) => sbi_get_mimpid(),
-        (0x53525354, 0x0) => sbi_system_reset(hart, hart.get_register(Register::ARG0 as u8), hart.get_register(Register::ARG1 as u8)),
+        (0x53525354, 0x0) => sbi_system_reset(hart,
+                                              hart.get_register(Register::ARG0 as u8),
+                                              hart.get_register(Register::ARG1 as u8)),
         (_, _) => Err(Error::NotSupported),
     };
 

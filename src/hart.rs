@@ -1,26 +1,32 @@
 use std::{fmt, process};
-use InstructionFormat::{R, I, S, B, U, J};
+use std::sync::Arc;
+
+use InstructionFormat::{B, I, J, R, S, U};
+
 use crate::csr;
-use crate::see;
-use crate::ram::Ram;
 use crate::csr::Csr;
+use crate::ram::Ram;
+use crate::see;
 
 const XLEN: usize = 32;
 
 pub struct Hart {
-    memory: Ram,
+    memory: Arc<Ram>,
     registers: [u32; 32],
     pc: u32,
     csr: Csr,
+
+    stop: bool,
 }
 
 impl Hart {
-    pub(crate) fn new(ram: Ram) -> Self {
+    pub(crate) fn new(ram: Arc<Ram>) -> Self {
         let mut m = Hart {
             memory: ram,
             registers: [0; 32],
             pc: 0,
             csr: Csr::new(),
+            stop: false,
         };
 
         // RV32 I
@@ -62,7 +68,15 @@ impl Hart {
         self.csr = Csr::new();
     }
 
-    pub(crate) fn tick(&mut self) {
+    pub(crate) fn stop(&mut self) {
+        self.stop = true;
+    }
+
+    pub(crate) fn tick(&mut self) -> bool {
+        if self.stop {
+            return false;
+        }
+
         let instruction = self.fetch_instruction();
         let instruction = self.decode_instruction(instruction);
         self.execute_instruction(instruction);
@@ -70,6 +84,8 @@ impl Hart {
         // simulate passing of time
         self.csr[csr::MCYCLE] += 3;
         self.csr[csr::MINSTRET] += 1;
+
+        true
     }
 
     pub fn set_register(&mut self, reg: u8, val: u32) {
