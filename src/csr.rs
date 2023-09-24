@@ -19,7 +19,9 @@ pub struct Csr {
 
 impl Csr {
     pub fn new() -> Csr {
-        Self { csrs: [0; CSR_SIZE] }
+        Self {
+            csrs: [0; CSR_SIZE],
+        }
     }
 }
 

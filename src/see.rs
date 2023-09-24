@@ -79,7 +79,7 @@ fn sbi_probe_extension(extension_id: u32) -> Result<u32, Error> {
         0x01 => Ok(1),
         0x02 => Ok(1),
         0x10 => Ok(1),
-        _ => Ok(0)
+        _ => Ok(0),
     }
 }
 
@@ -120,7 +120,11 @@ fn sbi_shutdown(hart: &mut hart::Hart) -> Result<u32, Error> {
 
 // System Reset Extension (EID #0x53525354 "SRST")
 
-fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
+fn sbi_system_reset(
+    hart: &mut hart::Hart,
+    reset_type: u32,
+    reset_reason: u32,
+) -> Result<u32, Error> {
     let reason = match reset_reason {
         0x00000000 => "No reason",
         0x00000001 => "System failure",
@@ -152,7 +156,6 @@ fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u32, reset_reason: u32) -
     }
 }
 
-
 // Legacy Extensions have a different calling convention
 fn call_0_1(hart: &mut hart::Hart) {
     let func = hart.get_register(Register::EID as u8);
@@ -176,7 +179,10 @@ fn call_0_1(hart: &mut hart::Hart) {
 }
 
 fn call_0_2(hart: &mut hart::Hart) {
-    let func = (hart.get_register(Register::EID as u8), hart.get_register(Register::FID as u8));
+    let func = (
+        hart.get_register(Register::EID as u8),
+        hart.get_register(Register::FID as u8),
+    );
 
     let result = match func {
         (0x10, 0x0) => sbi_get_spec_version(),
@@ -186,9 +192,11 @@ fn call_0_2(hart: &mut hart::Hart) {
         (0x10, 0x4) => sbi_get_mvendorid(),
         (0x10, 0x5) => sbi_get_marchid(),
         (0x10, 0x6) => sbi_get_mimpid(),
-        (0x53525354, 0x0) => sbi_system_reset(hart,
-                                              hart.get_register(Register::ARG0 as u8),
-                                              hart.get_register(Register::ARG1 as u8)),
+        (0x53525354, 0x0) => sbi_system_reset(
+            hart,
+            hart.get_register(Register::ARG0 as u8),
+            hart.get_register(Register::ARG1 as u8),
+        ),
         (_, _) => Err(Error::NotSupported),
     };
 

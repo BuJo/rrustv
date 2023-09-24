@@ -11,7 +11,9 @@ impl Ram {
         let mut ram = vec![0; DRAM_SIZE];
         ram.splice(..code.len(), code.iter().cloned());
 
-        Self { ram: RwLock::new(ram) }
+        Self {
+            ram: RwLock::new(ram),
+        }
     }
 
     pub fn write(&self, addr: usize, code: Vec<u8>) {
@@ -38,12 +40,11 @@ impl Ram {
     pub fn read_word(&self, addr: usize) -> u32 {
         let shared = self.ram.read().unwrap();
 
-        let ins: u32 =
-            0 +
-                ((shared[addr + 0] as u32) << 0) +
-                ((shared[addr + 1] as u32) << 8) +
-                ((shared[addr + 2] as u32) << 16) +
-                ((shared[addr + 3] as u32) << 24);
+        let ins: u32 = 0
+            + ((shared[addr + 0] as u32) << 0)
+            + ((shared[addr + 1] as u32) << 8)
+            + ((shared[addr + 2] as u32) << 16)
+            + ((shared[addr + 3] as u32) << 24);
         ins
     }
 
@@ -54,7 +55,6 @@ impl Ram {
         shared[addr]
     }
 }
-
 
 #[cfg(test)]
 mod tests {
