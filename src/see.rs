@@ -1,6 +1,6 @@
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 
 const SBI_VERSION: (u32, u32) = (1, 0);
@@ -75,6 +75,7 @@ fn sbi_get_sbi_impl_version() -> Result<u32, Error> {
 fn sbi_probe_extension(extension_id: u32) -> Result<u32, Error> {
     match extension_id {
         0x01 => Ok(1),
+        0x02 => Ok(1),
         0x10 => Ok(1),
         _ => Ok(0)
     }
@@ -101,12 +102,19 @@ fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
     Ok(0)
 }
 
+fn sbi_console_getchar() -> Result<u32, Error> {
+    let mut buffer = [0];
+    io::stdin().read(&mut buffer)?;
+    Ok(buffer[0] as u32)
+}
+
 // Legacy Extensions have a different calling convention
 fn call_0_1(registers: &mut [u32; 32]) {
     let func = registers[Register::EID];
 
     let result = match func {
         0x01 => sbi_console_putchar(registers[Register::ARG0]),
+        0x02 => sbi_console_getchar(),
         _ => Err(Error::NotSupported),
     };
 
