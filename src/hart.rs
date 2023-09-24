@@ -47,7 +47,7 @@ impl Hart {
         m
     }
 
-    pub(crate) fn reset(&mut self)  {
+    pub(crate) fn reset(&mut self) {
 
         // Status
         self.csr[csr::MEDELEG] = 0;
@@ -73,6 +73,7 @@ impl Hart {
     }
 
     pub fn set_register(&mut self, reg: u8, val: u32) {
+        //eprintln!("Setting register {} to 0x{:04x}", reg, val);
         match reg {
             0 => {}
             1..=31 => self.registers[reg as usize] = val,
@@ -200,7 +201,8 @@ impl Hart {
             }
             // auipc Add Upper Imm to PC
             U { opcode: 0b0010111, rd, imm } => {
-                let val = self.pc + ((imm as u32) << 12);
+                // one instruction length less
+                let val = self.pc - 4 + ((imm as u32) << 12);
                 self.set_register(rd, val)
             }
 
@@ -239,19 +241,19 @@ impl fmt::Display for InstructionFormat {
                 write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} 0x{:02x} ← 0x{:02x} · 0x{:02x}", opcode, funct3, funct7, rd, rs1, rs2)
             }
             I { opcode, rd, funct3, rs1, imm } => {
-                write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} ← 0x{:02x} · {}", opcode, funct3, rd, rs1, imm)
+                write!(f, "I 0b{:07b} 0x{:0x} 0x{:02x} ← 0x{:02x} · {}", opcode, funct3, rd, rs1, imm)
             }
             S { opcode, funct3, rs1, rs2, imm } => {
-                write!(f, "R 0b{:07b} 0x{:0x} M[0x{:02x}+{}] ← 0x{:02x}", opcode, funct3, rs1, imm, rs2)
+                write!(f, "S 0b{:07b} 0x{:0x} M[0x{:02x}+{}] ← 0x{:02x}", opcode, funct3, rs1, imm, rs2)
             }
             B { opcode, funct3, rs1, rs2, imm } => {
-                write!(f, "R 0b{:07b} 0x{:0x} 0x{:02x} · 0x{:02x} → {}", opcode, funct3, rs1, rs2, imm)
+                write!(f, "B 0b{:07b} 0x{:0x} 0x{:02x} · 0x{:02x} → {}", opcode, funct3, rs1, rs2, imm)
             }
             U { opcode, rd, imm } => {
-                write!(f, "R 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
+                write!(f, "U 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
             }
             J { opcode, rd, imm } => {
-                 write!(f, "R 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
+                write!(f, "J 0b{:07b} 0x{:02x} ← {}", opcode, rd, imm)
             }
         }
     }

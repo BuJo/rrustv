@@ -13,6 +13,7 @@
 
 _start:
   la t0, helloworld    # i = beginning of hello world
+
 _loop:
   lb    a0, 0(t0)       # load byte
   beq   a0, x0, _out    # if on 0 byte

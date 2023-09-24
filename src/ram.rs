@@ -13,7 +13,7 @@ impl Ram {
     }
 
     pub fn write(&mut self, addr: usize, code: Vec<u8>) {
-        self.ram.splice(addr..(addr+code.len()), code.iter().cloned());
+        self.ram.splice(addr..(addr + code.len()), code.iter().cloned());
     }
 
     pub fn write_word(&mut self, addr: usize, word: u32) {
@@ -38,6 +38,7 @@ impl Ram {
     }
 
     pub fn read_byte(&mut self, addr: usize) -> u8 {
+        //eprintln!("reading byte: {} at addr 0x{:04x}", self.ram[addr], addr);
         self.ram[addr]
     }
 }
