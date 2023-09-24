@@ -24,7 +24,7 @@ fn main() {
         let handle = thread::spawn(move || {
             let mut m = Hart::new(ram);
             for _ in 0..100 {
-                if m.tick() == false {
+                if !m.tick() {
                     break;
                 }
             }

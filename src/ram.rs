@@ -25,7 +25,7 @@ impl Ram {
     pub fn write_word(&self, addr: usize, word: u32) {
         let mut shared = self.ram.write().unwrap();
 
-        shared[addr + 0] = ((word >> 0) & 0xFF) as u8;
+        shared[addr] = (word & 0xFF) as u8;
         shared[addr + 1] = ((word >> 8) & 0xFF) as u8;
         shared[addr + 2] = ((word >> 16) & 0xFF) as u8;
         shared[addr + 3] = ((word >> 24) & 0xFF) as u8;
@@ -40,8 +40,7 @@ impl Ram {
     pub fn read_word(&self, addr: usize) -> u32 {
         let shared = self.ram.read().unwrap();
 
-        let ins: u32 = 0
-            + ((shared[addr + 0] as u32) << 0)
+        let ins: u32 = (shared[addr] as u32)
             + ((shared[addr + 1] as u32) << 8)
             + ((shared[addr + 2] as u32) << 16)
             + ((shared[addr + 3] as u32) << 24);

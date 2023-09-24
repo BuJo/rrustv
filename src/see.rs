@@ -10,6 +10,7 @@ const SBI_IMPL_ID: u32 = 0xFFFFFFFF;
 const SBI_IMPL_VERSION: u32 = 1;
 
 #[allow(dead_code)]
+#[allow(clippy::upper_case_acronyms)]
 enum Register {
     // a0: in/out (Error Code)
     ARG0 = 10,
@@ -63,7 +64,7 @@ impl From<io::Error> for Error {
 // Base Extension (EID #0x10)
 
 fn sbi_get_spec_version() -> Result<u32, Error> {
-    Ok(SBI_VERSION.0 << 24 + SBI_VERSION.1)
+    Ok((SBI_VERSION.0 << 24) + SBI_VERSION.1)
 }
 
 fn sbi_get_sbi_impl_id() -> Result<u32, Error> {
@@ -102,14 +103,14 @@ fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
 
     let mut handle = io::stdout().lock();
 
-    handle.write(&char)?;
+    handle.write_all(&char)?;
     handle.flush()?;
     Ok(0)
 }
 
 fn sbi_console_getchar() -> Result<u32, Error> {
     let mut buffer = [0];
-    io::stdin().read(&mut buffer)?;
+    io::stdin().read_exact(&mut buffer)?;
     Ok(buffer[0] as u32)
 }
 

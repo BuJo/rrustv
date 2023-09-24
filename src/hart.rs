@@ -30,13 +30,13 @@ impl Hart {
         };
 
         // RV32 I
-        m.csr[csr::MISA] = 0b01 << XLEN - 2 | 1 << 8;
+        m.csr[csr::MISA] = 0b01 << (XLEN - 2) | 1 << 8;
 
         // Non-commercial implementation
         m.csr[csr::MVENDORID] = 0;
 
         // Open-Source project, unregistered
-        m.csr[csr::MARCHID] = 0 << XLEN - 1 | 0;
+        m.csr[csr::MARCHID] = 0;
 
         // Version
         m.csr[csr::MIMPID] = 1;
