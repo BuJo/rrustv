@@ -3,6 +3,7 @@
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 use std::process;
+use crate::hart;
 
 const SBI_VERSION: (u32, u32) = (1, 0);
 const SBI_IMPL_ID: u32 = 0xFFFFFFFF;
@@ -115,7 +116,7 @@ fn sbi_shutdown() -> ! {
 
 // System Reset Extension (EID #0x53525354 "SRST")
 
-fn sbi_system_reset(reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
+fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
     let reason = match reset_reason {
         0x00000000 => "No reason",
         0x00000001 => "System failure",
@@ -132,17 +133,27 @@ fn sbi_system_reset(reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
             eprintln!("Shutting down: {}: {}", reset_reason, reason);
             process::exit(0)
         }
+        0x00000001 => {
+            eprintln!("Cold reboot: {}: {}", reset_reason, reason);
+            hart.reset();
+            Ok(0)
+        }
+        0x00000002 => {
+            eprintln!("Warm reboot: {}: {}", reset_reason, reason);
+            hart.reset();
+            Ok(0)
+        }
         _ => Err(Error::NotSupported),
     }
 }
 
 
 // Legacy Extensions have a different calling convention
-fn call_0_1(registers: &mut [u32; 32]) {
-    let func = registers[Register::EID];
+fn call_0_1(hart: &mut hart::Hart) {
+    let func = hart.get_register(Register::EID as u8);
 
     let result = match func {
-        0x01 => sbi_console_putchar(registers[Register::ARG0]),
+        0x01 => sbi_console_putchar(hart.get_register(Register::ARG0 as u8)),
         0x02 => sbi_console_getchar(),
         0x08 => sbi_shutdown(),
         _ => Err(Error::NotSupported),
@@ -150,46 +161,46 @@ fn call_0_1(registers: &mut [u32; 32]) {
 
     match result {
         Ok(value) => {
-            registers[Register::ARG0] = value;
+            hart.set_register(Register::ARG0 as u8, value);
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
-            registers[Register::ARG0] = error as u32;
+            hart.set_register(Register::ARG0 as u8, error as u32);
         }
     }
 }
 
-fn call_0_2(registers: &mut [u32; 32]) {
-    let func = (registers[Register::EID], registers[Register::FID]);
+fn call_0_2(hart: &mut hart::Hart) {
+    let func = (hart.get_register(Register::EID as u8), hart.get_register(Register::FID as u8));
 
     let result = match func {
         (0x10, 0x0) => sbi_get_spec_version(),
         (0x10, 0x1) => sbi_get_sbi_impl_id(),
         (0x10, 0x2) => sbi_get_sbi_impl_version(),
-        (0x10, 0x3) => sbi_probe_extension(registers[Register::ARG0]),
+        (0x10, 0x3) => sbi_probe_extension(hart.get_register(Register::ARG0 as u8)),
         (0x10, 0x4) => sbi_get_mvendorid(),
         (0x10, 0x5) => sbi_get_marchid(),
         (0x10, 0x6) => sbi_get_mimpid(),
-        (0x53525354, 0x0) => sbi_system_reset(registers[Register::ARG0], registers[Register::ARG1]),
+        (0x53525354, 0x0) => sbi_system_reset(hart, hart.get_register(Register::ARG0 as u8), hart.get_register(Register::ARG1 as u8)),
         (_, _) => Err(Error::NotSupported),
     };
 
     match result {
         Ok(value) => {
-            registers[Register::ARG0] = Error::Success as u32;
-            registers[Register::ARG1] = value;
+            hart.set_register(Register::ARG0 as u8, Error::Success as u32);
+            hart.set_register(Register::ARG1 as u8, value);
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
-            registers[Register::ARG0] = error as u32;
+            hart.set_register(Register::ARG0 as u8, error as u32);
         }
     }
 }
 
-pub fn call(registers: &mut [u32; 32]) {
-    if (0x00..=0x0F).contains(&registers[Register::EID]) {
-        call_0_1(registers)
+pub fn call(hart: &mut hart::Hart) {
+    if (0x00..=0x0F).contains(&hart.get_register(Register::EID as u8)) {
+        call_0_1(hart)
     } else {
-        call_0_2(registers)
+        call_0_2(hart)
     }
 }

@@ -72,7 +72,7 @@ impl Hart {
         self.csr[csr::MINSTRET] += 1;
     }
 
-    fn set_register(&mut self, reg: u8, val: u32) {
+    pub fn set_register(&mut self, reg: u8, val: u32) {
         match reg {
             0 => {}
             1..=31 => self.registers[reg as usize] = val,
@@ -80,7 +80,7 @@ impl Hart {
         }
     }
 
-    fn get_register(&self, reg: u8) -> u32 {
+    pub fn get_register(&self, reg: u8) -> u32 {
         match reg {
             0..=31 => self.registers[reg as usize],
             _ => { panic!() }
@@ -207,7 +207,7 @@ impl Hart {
             // ecall Environment Call
             I { opcode: 0b1110011, funct3: 0x0, imm: 0x0, .. } => {
                 // We're unprivileged machine mode, no need to check SEDELEG
-                see::call(&mut self.registers);
+                see::call(self);
             }
             // ebreak Environment Break
             I { opcode: 0b1110011, funct3: 0x0, imm: 0x1, .. } => {
