@@ -5,18 +5,20 @@ mod see;
 
 use crate::hart::Hart;
 use crate::ram::Ram;
-use std::fs;
 use std::sync::Arc;
 use std::thread;
+use std::{env, fs};
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let threads = args.get(1).and_then(|x| x.parse::<i32>().ok()).unwrap_or(1);
+
     let text = fs::read("target/target.text").expect("no .text");
     let data = fs::read("target/target.data").expect("no .data");
 
     let ram = Arc::new(Ram::new(text));
     ram.write(0x1000, data);
 
-    let threads = 5;
     let mut handles = vec![];
 
     for _ in 0..threads {
