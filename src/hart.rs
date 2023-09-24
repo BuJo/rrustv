@@ -27,7 +27,6 @@ impl Hart {
         m.csr[csr::MISA] =
             0b01 << XLEN - 2 |
                 1 << 8;
-        m.csr[csr::MEDELEG] = 0;
 
         // Non-commercial implementation
         m.csr[csr::MVENDORID] = 0;
@@ -39,17 +38,28 @@ impl Hart {
         // Version
         m.csr[csr::MIMPID] = 1;
 
-        // Cycle counters
-        m.csr[csr::MCYCLE] = 0;  // actually per core, not hart
-        m.csr[csr::MINSTRET] = 0;
-
         // Current hart
         m.csr[csr::MHARTID] = 0;
 
-        // Status
-        m.csr[csr::MSTATUS] = 0;
+
+        m.reset();
 
         m
+    }
+
+    pub(crate) fn reset(&mut self)  {
+
+        // Status
+        self.csr[csr::MEDELEG] = 0;
+        self.csr[csr::MSTATUS] = 0;
+
+        // Cycle counters
+        self.csr[csr::MCYCLE] = 0;  // actually per core, not hart
+        self.csr[csr::MINSTRET] = 0;
+
+        self.pc = 0;
+        self.registers = [0; 32];
+        self.csr = Csr::new();
     }
 
     pub(crate) fn tick(&mut self) {
