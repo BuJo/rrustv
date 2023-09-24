@@ -43,22 +43,46 @@ enum Error {
     AlreadyStopped = -8,
 }
 
+impl From<std::num::TryFromIntError> for Error {
+    fn from(_value: std::num::TryFromIntError) -> Self {
+        Error::InvalidParam
+    }
+}
+impl From<io::Error> for Error {
+    fn from(_value: io::Error) -> Self {
+        Error::Failed
+    }
+}
+
+fn sbi_get_spec_version() -> Result<u32, Error> {
+    Ok(SBI_VERSION.0 << 24 + SBI_VERSION.1)
+}
+
+fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
+    let char = [u8::try_from(value)?];
+    io::stdout().write_all(&char)?;
+    io::stdout().flush()?;
+    Ok(0)
+}
+
 pub fn call(registers: &mut [u32; 32]) {
     let func = (registers[Register::EID], registers[Register::FID]);
 
-    match func {
-        (0x10, 0x0) => {
-            let spec_version: u32 = SBI_VERSION.0 << 24 + SBI_VERSION.1;
+    let result = match func {
+        (0x10, 0x0) => sbi_get_spec_version(),
+        (0x01, _) => sbi_console_putchar(registers[Register::ARG0]),
+        (_, _) => Err(Error::NotSupported),
+    };
+
+    match result {
+        Ok(value) => {
             registers[Register::ARG0] = Error::Success as u32;
-            registers[Register::ARG1] = spec_version;
+            registers[Register::ARG1] = value;
         }
-        (0x01, _) => {
-            print!("{}", char::from_u32(registers[Register::ARG0]).unwrap());
-            io::stdout().flush().unwrap();
-        }
-        (eid, fid) => {
-            registers[Register::ARG0] = Error::NotSupported as u32;
-            eprintln!("invalid syscall: {}/{}", eid, fid)
+        Err(error) => {
+            eprintln!("error in syscall: {:?}", func);
+            registers[Register::ARG0] = error as u32;
+            registers[Register::ARG1] = 0;
         }
     }
 }
