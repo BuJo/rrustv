@@ -27,3 +27,27 @@ cargo run
    See the License for the specific language governing permissions and
    limitations under the License.
 ```
+
+## Literature
+
+* [RISC-V ISA Volume 1](https://riscv.org/technical/specifications/)
+* [RISC-V ISA Volume 2](https://riscv.org/technical/specifications/)
+* [RISC-V Technical Specifications](https://wiki.riscv.org/display/HOME/RISC-V+Technical+Specifications)
+* [RISC-V SBI](https://github.com/riscv-non-isa/riscv-sbi-doc)
+* [RISC-V ELF psABI](https://github.com/riscv-non-isa/riscv-elf-psabi-doc)
+* [The RISC-V Microcontroller Profile](https://github.com/emb-riscv/specs-markdown)
+* [RISC-V Online Assembler](https://riscvasm.lucasteske.dev/#)
+* [DarkRISCV](https://github.com/darklife/darkriscv)
+* [RISC-V GNU Toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain)
+* [OpenHW Group CV32E40S User Manual](https://docs.openhwgroup.org/projects/cv32e40s-user-manual/en/latest/index.html)
+* [Misunderstanding RISC-V ecalls and syscalls](https://jborza.com/emulation/2021/04/22/ecalls-and-syscalls.html)
+* [Rust interior mutability](https://doc.rust-lang.org/book/ch16-03-shared-state.html)
+* [UART Communications RISC-V OS In Rust](https://osblog.stephenmarz.com/ch2.html)
+* [RISC-V from scratch 3](https://twilco.github.io/riscv-from-scratch/2019/07/08/riscv-from-scratch-3.html)
+* [rustsbi](https://docs.rs/rustsbi/latest/rustsbi/)
+* [emuriscv](https://github.com/jborza/emuriscv)
+* [The Sodor Processor Collection](https://github.com/ucb-bar/riscv-sodor)
+* [An overview of OpenSBI](https://www.thegoodpenguin.co.uk/blog/an-overview-of-opensbi/)
+* [Trivial RISC-V Linux Binary Bootloader](https://github.com/ultraembedded/riscv-linux-boot)
+* [Rare: Rust A Fiscv Emulator](https://siriusdemon.github.io/Rare/v3-CSR.html)
+* [Writing a RISC-V Emulator in Rust](https://book.rvemu.app/index.html)
