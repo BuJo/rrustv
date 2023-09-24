@@ -8,8 +8,8 @@
 
 .global _start      # Provide program starting address to linker
 
-# Setup the parameters to print hello world
-# and then call Linux to do it.
+# Setup the Loop to print each byte from the .data segment
+# and print each character with SBI legacy commands.
 
 _start:
   la t0, helloworld    # i = beginning of hello world
