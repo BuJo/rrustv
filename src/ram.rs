@@ -3,7 +3,7 @@ use std::sync::RwLock;
 pub const DRAM_SIZE: usize = 1024 * 1024 * 128; // 128MiB
 
 pub struct Ram {
-    pub ram: RwLock<Vec<u8>>,
+    ram: RwLock<Vec<u8>>,
 }
 
 impl Ram {

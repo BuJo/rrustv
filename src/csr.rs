@@ -1,7 +1,7 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 
-pub const CSR_SIZE: usize = 4096;
+pub const NUM_CSRS: usize = 4096;
 pub const MSTATUS: usize = 0x300;
 pub const MISA: usize = 0x301;
 pub const MEDELEG: usize = 0x301;
@@ -14,13 +14,13 @@ pub const MCYCLE: usize = 0xB00;
 pub const MINSTRET: usize = 0xB02;
 
 pub struct Csr {
-    pub csrs: [u32; CSR_SIZE],
+    csrs: [u32; NUM_CSRS],
 }
 
 impl Csr {
     pub fn new() -> Csr {
         Self {
-            csrs: [0; CSR_SIZE],
+            csrs: [0; NUM_CSRS],
         }
     }
 }
