@@ -119,15 +119,11 @@ fn sbi_system_reset(reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
     let reason = match reset_reason {
         0x00000000 => "No reason",
         0x00000001 => "System failure",
-        0x00000002..=0xDFFFFFFF => {
-            // Reserved
-            return Err(Error::InvalidParam)
-        },
         0xE0000000..=0xEFFFFFFF => "SBI implementation specific reset reason",
         0xF0000000..=0xFFFFFFFF => "Vendor or platform specific reset reason",
         _ => {
             // Reserved
-            return Err(Error::InvalidParam)
+            return Err(Error::InvalidParam);
         }
     };
 
@@ -135,7 +131,7 @@ fn sbi_system_reset(reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
         0x00000000 => {
             eprintln!("Shutting down: {}: {}", reset_reason, reason);
             process::exit(0)
-        },
+        }
         _ => Err(Error::NotSupported),
     }
 }
