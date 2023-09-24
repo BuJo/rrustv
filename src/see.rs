@@ -2,6 +2,7 @@
 // RISC-V SBI (Supervisor Binary Interface)
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
+use std::process;
 
 const SBI_VERSION: (u32, u32) = (1, 0);
 const SBI_IMPL_ID: u32 = 0xFFFFFFFF;
@@ -108,6 +109,38 @@ fn sbi_console_getchar() -> Result<u32, Error> {
     Ok(buffer[0] as u32)
 }
 
+fn sbi_shutdown() -> ! {
+    process::exit(0);
+}
+
+// System Reset Extension (EID #0x53525354 "SRST")
+
+fn sbi_system_reset(reset_type: u32, reset_reason: u32) -> Result<u32, Error> {
+    let reason = match reset_reason {
+        0x00000000 => "No reason",
+        0x00000001 => "System failure",
+        0x00000002..=0xDFFFFFFF => {
+            // Reserved
+            return Err(Error::InvalidParam)
+        },
+        0xE0000000..=0xEFFFFFFF => "SBI implementation specific reset reason",
+        0xF0000000..=0xFFFFFFFF => "Vendor or platform specific reset reason",
+        _ => {
+            // Reserved
+            return Err(Error::InvalidParam)
+        }
+    };
+
+    match reset_type {
+        0x00000000 => {
+            eprintln!("Shutting down: {}: {}", reset_reason, reason);
+            process::exit(0)
+        },
+        _ => Err(Error::NotSupported),
+    }
+}
+
+
 // Legacy Extensions have a different calling convention
 fn call_0_1(registers: &mut [u32; 32]) {
     let func = registers[Register::EID];
@@ -115,6 +148,7 @@ fn call_0_1(registers: &mut [u32; 32]) {
     let result = match func {
         0x01 => sbi_console_putchar(registers[Register::ARG0]),
         0x02 => sbi_console_getchar(),
+        0x08 => sbi_shutdown(),
         _ => Err(Error::NotSupported),
     };
 
@@ -140,6 +174,7 @@ fn call_0_2(registers: &mut [u32; 32]) {
         (0x10, 0x4) => sbi_get_mvendorid(),
         (0x10, 0x5) => sbi_get_marchid(),
         (0x10, 0x6) => sbi_get_mimpid(),
+        (0x53525354, 0x0) => sbi_system_reset(registers[Register::ARG0], registers[Register::ARG1]),
         (_, _) => Err(Error::NotSupported),
     };
 
