@@ -3,35 +3,17 @@ mod ram;
 mod csr;
 mod see;
 
+use std::fs;
 use crate::hart::Hart;
 use crate::ram::Ram;
 
 
 fn main() {
-    let mut ram = Ram::new(vec![
-        // <_start>:
-        // li	t0,64
-        0x93, 0x02, 0x00, 0x04,
+    let text = fs::read("test/target.text").expect("no .text");
+    let data = fs::read("test/target.data").expect("no .data");
 
-        // <_loop>:
-        // lb	a0,0(t0)
-        0x03, 0x85, 0x02, 0x00,
-        // beqz	a0,20 <_out>
-        0x63, 0x0a, 0x05, 0x00,
-        // li	a7,1
-        0x93, 0x08, 0x10, 0x00,
-        // ecall
-        0x73, 0x00, 0x00, 0x00,
-        // addi	t0,t0,1
-        0x93, 0x82, 0x12, 0x00,
-        // beqz	zero,4 <_loop>
-        0xe3, 0x06, 0x00, 0xfe,
-
-        // <_out>:
-        // ebreak
-        0x73, 0x00, 0x10, 00,
-    ]);
-    ram.write(0x40, vec![0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x0a, 0x00]);
+    let mut ram = Ram::new(text);
+    ram.write(0x1000, data);
 
     let mut m = Hart::new(ram);
     for _ in 0..100 {
