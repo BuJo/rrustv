@@ -6,7 +6,7 @@ CCFLAGS = -Wall -fcommon -ffreestanding -O2
 CCFLAGS += -march=$(ARCH) -mabi=$(ABI)
 CCFLAGS += -D__RISCV__ -DBUILD="\"$(BUILD)\"" -DARCH="\"$(ARCH)\""
 ASFLAGS = -march=$(ARCH)
-LDFLAGS = -T$(PROJ).ld -Map=$(PROJ).map -m elf32lriscv -static -gc-sections --entry=_start # -Ttext=0
+LDFLAGS = -T$(PROJ).ld -Map=$(PROJ).map -m elf32lriscv -static --entry=_start -gc-sections --print-gc-sections # -gc-sections -Ttext=0
 CPFLAGS = -P
 OCFLAGS = -O binary
 ODFLAGS = -D
@@ -21,6 +21,9 @@ OC  = $(CCPATH)/$(CROSS)-objcopy
 OD  = $(CCPATH)/$(CROSS)-objdump
 CPP = $(CCPATH)/$(CROSS)-cpp
 
+all: $(PROJ).text $(PROJ).data $(PROJ).uart
+	$(OD) -s -d $(PROJ).o
+
 %.o: %.s Makefile
 	$(AS) $(ASFLAGS) -c $< -o $@
 
@@ -32,11 +35,8 @@ CPP = $(CCPATH)/$(CROSS)-cpp
 $(PROJ).o: HelloWorld.o $(PROJ).ld
 	$(LD) $(LDFLAGS) -o $@ HelloWorld.o
 
-all: $(PROJ).text $(PROJ).data $(PROJ).uart
-	$(OD) -s -d $(PROJ).o
-
 clean:
-	-rm -f HelloWorld.o $(PROJ).text $(PROJ).data $(PROJ).uart $(PROJ).ld
+	-rm -f HelloWorld.o $(PROJ).text $(PROJ).data $(PROJ).uart $(PROJ).ld $(PROJ).map
 
 $(PROJ).text: $(PROJ).o
 	$(OC) $(OCFLAGS) $< $(PROJ).text --only-section .*text* 

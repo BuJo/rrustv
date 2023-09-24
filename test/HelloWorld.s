@@ -12,7 +12,7 @@
 # and then call Linux to do it.
 
 _start:
-  addi  t0, x0, 0x40    # i = beginning of hello world
+  la t0, helloworld    # i = beginning of hello world
 _loop:
   lb    a0, 0(t0)       # load byte
   beq   a0, x0, _out    # if on 0 byte
