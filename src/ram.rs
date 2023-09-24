@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn init_read() {
-        let mut ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
         let i = ram.read_word(0);
 
         assert_eq!(i, 0x7d008113, "x1 mismatch");
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn write_read_cycle() {
-        let mut ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
         ram.write_word(0, 0xdeadbeef);
         let i = ram.read_word(0);
 

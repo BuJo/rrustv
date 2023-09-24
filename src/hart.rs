@@ -278,13 +278,14 @@ impl fmt::Display for InstructionFormat {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use crate::Hart;
     use crate::ram::Ram;
 
     #[test]
     fn addi() {
         let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let mut m = Hart::new(ram);
+        let mut m = Hart::new(Arc::new(ram));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     fn addi_neg() {
         let ram = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
-        let mut m = Hart::new(ram);
+        let mut m = Hart::new(Arc::new(ram));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
@@ -315,7 +316,7 @@ mod tests {
             // addi	t1,t1,4
             0x13, 0x03, 0x43, 0x00,
         ]);
-        let mut m = Hart::new(ram);
+        let mut m = Hart::new(Arc::new(ram));
         m.tick();
         m.tick();
         m.tick();
