@@ -4,13 +4,14 @@ This project aims to provide a learning platform for RISC-V and Rust.
 
 ```mermaid
 flowchart LR
-    hart[HART] --> ram(RAM)
+    hart[HART] --> bus[bus]
+    bus --> ram(RAM)
     hart --> csr(CSR)
     hart -->|SBI| see[SEE]
     see -..-> hart
 ```
 
-* `RAM` is shared between one or more `hart`
+* `RAM` is shared between one or more `hart`s via the bus
 * `SEE` is global
 * `CSR`s are per `hart` (or per core)
 * The `SEE` can control all `hart`s

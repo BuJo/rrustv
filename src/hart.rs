@@ -1,17 +1,17 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::bus::Bus;
 use InstructionFormat::{B, I, J, R, S, U};
 
 use crate::csr;
 use crate::csr::Csr;
-use crate::ram::Ram;
 use crate::see;
 
 const XLEN: usize = 32;
 
 pub struct Hart {
-    memory: Arc<Ram>,
+    bus: Arc<Bus>,
     registers: [u32; 32],
     pc: u32,
     csr: Csr,
@@ -20,9 +20,9 @@ pub struct Hart {
 }
 
 impl Hart {
-    pub(crate) fn new(id: u32, ram: Arc<Ram>) -> Self {
+    pub(crate) fn new(id: u32, bus: Arc<Bus>) -> Self {
         let mut m = Hart {
-            memory: ram,
+            bus,
             registers: [0; 32],
             pc: 0,
             csr: Csr::new(),
@@ -99,9 +99,9 @@ impl Hart {
     }
 
     fn fetch_instruction(&mut self) -> u32 {
-        let ins = self.memory.read_word(self.pc as usize);
+        let ins = self.bus.read_word(self.pc as usize);
         self.pc += 4;
-        ins
+        ins.unwrap_or(0x00100073)
     }
 
     fn decode_instruction(&self, instruction: u32) -> InstructionFormat {
@@ -231,7 +231,7 @@ impl Hart {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
-                let val = self.memory.read_byte(addr);
+                let val = self.bus.read_byte(addr).expect("ram being readable");
                 self.set_register(rd, val as u32)
             }
             // sb Store Byte
@@ -244,7 +244,7 @@ impl Hart {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2 & 0xF) as u8;
-                self.memory.write_byte(addr, val)
+                self.bus.write_byte(addr, val).expect("ram being writeable")
             }
             // sw Store Word
             S {
@@ -256,7 +256,7 @@ impl Hart {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
-                self.memory.write_word(addr, val)
+                self.bus.write_word(addr, val).expect("ram being writeable")
             }
             // beq Branch ==
             B {
@@ -439,29 +439,32 @@ impl fmt::Display for InstructionFormat {
 
 #[cfg(test)]
 mod tests {
+    use crate::bus::Bus;
     use crate::ram::Ram;
     use crate::Hart;
     use std::sync::Arc;
 
     #[test]
     fn addi() {
-        let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let mut m = Hart::new(0, Arc::new(ram));
+        let rom = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let bus = Bus::new(rom);
+        let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
 
     #[test]
     fn addi_neg() {
-        let ram = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
-        let mut m = Hart::new(0, Arc::new(ram));
+        let rom = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
+        let bus = Bus::new(rom);
+        let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
 
     #[test]
     fn it_works() {
-        let ram = Ram::new(vec![
+        let rom = Ram::new(vec![
             0x93, 0x00, 0x80, 0x3e, // li	ra,1000
             0x13, 0x81, 0x00, 0x7d, // addi	sp,ra,2000
             0x93, 0x01, 0x81, 0xc1, // addi	gp,sp,-1000
@@ -470,7 +473,8 @@ mod tests {
             0x13, 0x03, 0x00, 0x04, // li	t1,64
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
-        let mut m = Hart::new(0, Arc::new(ram));
+        let bus = Bus::new(rom);
+        let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         m.tick();
         m.tick();
