@@ -1,5 +1,5 @@
+use std::fmt;
 use std::sync::Arc;
-use std::{fmt, process};
 
 use InstructionFormat::{B, I, J, R, S, U};
 
@@ -20,7 +20,7 @@ pub struct Hart {
 }
 
 impl Hart {
-    pub(crate) fn new(ram: Arc<Ram>) -> Self {
+    pub(crate) fn new(id: u32, ram: Arc<Ram>) -> Self {
         let mut m = Hart {
             memory: ram,
             registers: [0; 32],
@@ -42,7 +42,7 @@ impl Hart {
         m.csr[csr::MIMPID] = 1;
 
         // Current hart
-        m.csr[csr::MHARTID] = 0;
+        m.csr[csr::MHARTID] = id;
 
         m.reset();
 
@@ -60,7 +60,6 @@ impl Hart {
 
         self.pc = 0;
         self.registers = [0; 32];
-        self.csr = Csr::new();
     }
 
     pub(crate) fn stop(&mut self) {
@@ -84,7 +83,7 @@ impl Hart {
     }
 
     pub fn set_register(&mut self, reg: u8, val: u32) {
-        //eprintln!("Setting register {} to 0x{:04x}", reg, val);
+        //eprintln!("[{}] Setting register {} to 0x{:04x}", self.csr[csr::MHARTID], reg, val);
         match reg {
             0 => {}
             1..=31 => self.registers[reg as usize] = val,
@@ -178,7 +177,8 @@ impl Hart {
             }
             _ => {
                 eprintln!(
-                    "[{:#x}] {:07b} Unknown opcode {}",
+                    "[{}] [{:#x}] {:07b} Unknown opcode {}",
+                    self.csr[csr::MHARTID],
                     self.pc,
                     opcode,
                     self.csr[csr::MINSTRET]
@@ -189,7 +189,12 @@ impl Hart {
     }
 
     fn execute_instruction(&mut self, instruction: InstructionFormat) {
-        eprintln!("[0x{:04x}] {}", self.pc, instruction);
+        eprintln!(
+            "[{}] [0x{:04x}] {}",
+            self.csr[csr::MHARTID],
+            self.pc,
+            instruction
+        );
 
         match instruction {
             // RV32I
@@ -308,11 +313,15 @@ impl Hart {
                 imm: 0x1,
                 ..
             } => {
-                // simply exit the program instead of dropping into the debugger
-                process::exit(0);
+                // Stop the hart, the Execution Environment has to take over
+                self.stop = true;
             }
             _ => {
-                eprintln!("Unknown instruction: {:}", instruction);
+                eprintln!(
+                    "[{}] Unknown instruction: {:}",
+                    self.csr[csr::MHARTID],
+                    instruction
+                );
                 todo!()
             }
         }
@@ -437,7 +446,7 @@ mod tests {
     #[test]
     fn addi() {
         let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let mut m = Hart::new(Arc::new(ram));
+        let mut m = Hart::new(0, Arc::new(ram));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
@@ -445,7 +454,7 @@ mod tests {
     #[test]
     fn addi_neg() {
         let ram = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
-        let mut m = Hart::new(Arc::new(ram));
+        let mut m = Hart::new(0, Arc::new(ram));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
@@ -461,7 +470,7 @@ mod tests {
             0x13, 0x03, 0x00, 0x04, // li	t1,64
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
-        let mut m = Hart::new(Arc::new(ram));
+        let mut m = Hart::new(0, Arc::new(ram));
         m.tick();
         m.tick();
         m.tick();
