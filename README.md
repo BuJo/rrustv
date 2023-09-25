@@ -1,4 +1,4 @@
-# RISC-V Rust Emulator
+# RISC-V Rust Emulator (RV32I)
 
 This project aims to provide a learning platform for RISC-V and Rust.
 
@@ -26,6 +26,8 @@ flowchart LR
 | ISA  | Instruction Set Architecture     |
 | M    | Machine Mode                     |
 | XLEN | RISC-V 32 or 64 flavour          |
+| EEI  | Execution Environment Interface  |
+| ABI  | Application Binary Interface     |
 
 ## Development
 
@@ -74,5 +76,5 @@ cargo run
 * [The Sodor Processor Collection](https://github.com/ucb-bar/riscv-sodor)
 * [An overview of OpenSBI](https://www.thegoodpenguin.co.uk/blog/an-overview-of-opensbi/)
 * [Trivial RISC-V Linux Binary Bootloader](https://github.com/ultraembedded/riscv-linux-boot)
-* [Rare: Rust A Fiscv Emulator](https://siriusdemon.github.io/Rare/v3-CSR.html)
+* [Rare: Rust A RISC-V Emulator](https://siriusdemon.github.io/Rare/v3-CSR.html)
 * [Writing a RISC-V Emulator in Rust](https://book.rvemu.app/index.html)
