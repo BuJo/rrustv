@@ -1,9 +1,9 @@
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
+use crate::hart;
+
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
-
-use crate::hart;
 
 const SBI_VERSION: (u32, u32) = (1, 0);
 const SBI_IMPL_ID: u32 = 0xFFFFFFFF;

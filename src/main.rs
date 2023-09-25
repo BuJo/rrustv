@@ -2,14 +2,17 @@ mod bus;
 mod csr;
 mod hart;
 mod ram;
+mod rtc;
 mod see;
+
+use std::sync::Arc;
+use std::thread;
+use std::{env, fs};
 
 use crate::bus::Bus;
 use crate::hart::Hart;
 use crate::ram::Ram;
-use std::sync::Arc;
-use std::thread;
-use std::{env, fs};
+use crate::rtc::Rtc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -21,7 +24,9 @@ fn main() {
     let rom = Ram::new(text);
     rom.write(0x1000, data);
 
-    let bus = Arc::new(Bus::new(rom));
+    let rtc = Rtc::new();
+
+    let bus = Arc::new(Bus::new(rom, rtc));
 
     let mut handles = vec![];
 

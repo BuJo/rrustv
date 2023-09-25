@@ -6,12 +6,14 @@ This project aims to provide a learning platform for RISC-V and Rust.
 flowchart LR
     hart[HART] --> bus[bus]
     bus --> ram(RAM)
+    bus --> rtc(RTC)
     hart --> csr(CSR)
     hart -->|SBI| see[SEE]
     see -..-> hart
 ```
 
 * `RAM` is shared between one or more `hart`s via the bus
+* `RTC` is memory mapped and reachable from the bus
 * `SEE` is global
 * `CSR`s are per `hart` (or per core)
 * The `SEE` can control all `hart`s
@@ -29,6 +31,7 @@ flowchart LR
 | XLEN | RISC-V 32 or 64 flavour          |
 | EEI  | Execution Environment Interface  |
 | ABI  | Application Binary Interface     |
+| RTC  | Real Time Clock                  |
 
 ## Development
 

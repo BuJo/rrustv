@@ -1,9 +1,8 @@
 use std::fmt;
 use std::sync::Arc;
-
-use crate::bus::Bus;
 use InstructionFormat::{B, I, J, R, S, U};
 
+use crate::bus::Bus;
 use crate::csr;
 use crate::csr::Csr;
 use crate::see;
@@ -441,13 +440,15 @@ impl fmt::Display for InstructionFormat {
 mod tests {
     use crate::bus::Bus;
     use crate::ram::Ram;
+    use crate::rtc::Rtc;
     use crate::Hart;
     use std::sync::Arc;
 
     #[test]
     fn addi() {
         let rom = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let bus = Bus::new(rom);
+        let rtc = Rtc::new();
+        let bus = Bus::new(rom, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
@@ -456,7 +457,8 @@ mod tests {
     #[test]
     fn addi_neg() {
         let rom = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
-        let bus = Bus::new(rom);
+        let rtc = Rtc::new();
+        let bus = Bus::new(rom, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
@@ -473,7 +475,8 @@ mod tests {
             0x13, 0x03, 0x00, 0x04, // li	t1,64
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
-        let bus = Bus::new(rom);
+        let rtc = Rtc::new();
+        let bus = Bus::new(rom, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         m.tick();
