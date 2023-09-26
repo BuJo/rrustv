@@ -4,6 +4,7 @@ mod hart;
 mod ram;
 mod rtc;
 mod see;
+mod dts;
 
 use std::sync::Arc;
 use std::thread;
