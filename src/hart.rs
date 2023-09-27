@@ -7,8 +7,6 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::see;
 
-const XLEN: usize = 32;
-
 pub struct Hart {
     bus: Arc<Bus>,
     registers: [u32; 32],
@@ -24,24 +22,9 @@ impl Hart {
             bus,
             registers: [0; 32],
             pc: 0,
-            csr: Csr::new(),
+            csr: Csr::new(id),
             stop: false,
         };
-
-        // RV32 I
-        m.csr[csr::MISA] = 0b01 << (XLEN - 2) | 1 << 8;
-
-        // Non-commercial implementation
-        m.csr[csr::MVENDORID] = 0;
-
-        // Open-Source project, unregistered
-        m.csr[csr::MARCHID] = 0;
-
-        // Version
-        m.csr[csr::MIMPID] = 1;
-
-        // Current hart
-        m.csr[csr::MHARTID] = id;
 
         m.reset();
 
@@ -49,14 +32,6 @@ impl Hart {
     }
 
     pub(crate) fn reset(&mut self) {
-        // Status
-        self.csr[csr::MEDELEG] = 0;
-        self.csr[csr::MSTATUS] = 0;
-
-        // Cycle counters
-        self.csr[csr::MCYCLE] = 0; // actually per core, not hart
-        self.csr[csr::MINSTRET] = 0;
-
         self.pc = 0;
         self.registers = [0; 32];
     }
