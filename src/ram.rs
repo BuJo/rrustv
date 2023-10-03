@@ -25,10 +25,10 @@ impl Ram {
     pub fn write_word(&self, addr: usize, word: u32) -> Option<()> {
         let mut shared = self.ram.write().unwrap();
 
-        shared[addr] = (word & 0xFF) as u8;
-        shared[addr + 1] = ((word >> 8) & 0xFF) as u8;
-        shared[addr + 2] = ((word >> 16) & 0xFF) as u8;
-        shared[addr + 3] = ((word >> 24) & 0xFF) as u8;
+        *(shared.get_mut(addr)?)= (word & 0xFF) as u8;
+        *(shared.get_mut(addr+1)?) = ((word >> 8) & 0xFF) as u8;
+        *(shared.get_mut(addr+2)?) = ((word >> 16) & 0xFF) as u8;
+        *(shared.get_mut(addr+3)?) = ((word >> 24) & 0xFF) as u8;
 
         Some(())
     }
@@ -36,8 +36,7 @@ impl Ram {
     pub fn write_byte(&self, addr: usize, val: u8) -> Option<()> {
         let mut shared = self.ram.write().unwrap();
 
-        shared[addr] = val;
-
+        *(shared.get_mut(addr)?) = val;
         Some(())
     }
 
