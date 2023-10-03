@@ -20,6 +20,7 @@ flowchart LR
 * `SEE` is global
 * `CSR`s are per `hart` (or per core)
 * The `SEE` can control all `hart`s
+* The device tree (`DTB`) is accessible via `RAM`
 
 ### Glossary
 
