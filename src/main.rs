@@ -1,6 +1,6 @@
 mod bus;
 mod csr;
-mod dts;
+mod dt;
 mod hart;
 mod ram;
 mod rom;
@@ -22,7 +22,7 @@ fn main() {
     let threads = args.get(1).and_then(|x| x.parse::<u32>().ok()).unwrap_or(1);
 
     let text = fs::read("target/target.text").expect("no .text");
-    let dtb = dts::load();
+    let dtb = dt::load();
 
     let rom = Rom::new(text);
     let ram = Ram::new();

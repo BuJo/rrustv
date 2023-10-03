@@ -4,8 +4,10 @@ This project aims to provide a learning platform for RISC-V and Rust.
 
 ```mermaid
 flowchart LR
-    hart[HART] --> bus[bus]
+    hart[HART] --> bus{bus}
+    bus --> rom(ROM)
     bus --> ram(RAM)
+    ram --> dt(DTB)
     bus --> rtc(RTC)
     hart --> csr(CSR)
     hart -->|SBI| see[SEE]
@@ -13,6 +15,7 @@ flowchart LR
 ```
 
 * `RAM` is shared between one or more `hart`s via the bus
+* `ROM` is shared between one or more `hart`s via the bus
 * `RTC` is memory mapped and reachable from the bus
 * `SEE` is global
 * `CSR`s are per `hart` (or per core)
@@ -32,6 +35,9 @@ flowchart LR
 | EEI  | Execution Environment Interface  |
 | ABI  | Application Binary Interface     |
 | RTC  | Real Time Clock                  |
+| DTS  | Device Tree Source               |
+| FTD  | Flattened Device Tree            |
+| DTB  | Device Tree Blob                 |
 
 ## Development
 
@@ -104,3 +110,4 @@ limitations under the License.
 * [example DTS for the HiFive Unleashed](https://github.com/riscv-non-isa/riscv-device-tree-doc/blob/master/examples/sifive-hifive_unleashed-microsemi.dts)
 * [Device Node Requirements](https://devicetree-specification.readthedocs.io/en/latest/chapter3-devicenodes.html)
 * [Device Tree Usage](https://elinux.org/Device_Tree_Usage)
+* [Introduction to Device Trees](https://www.nxp.com/docs/en/application-note/AN5125.pdf)
