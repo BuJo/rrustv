@@ -27,12 +27,12 @@ impl Rtc {
         match addr {
             MTIMECMP_ADDR => {
                 let mut low = self.mtimecmptmp.write().unwrap();
-                *low = (*low & 0xFFFFFFFF_00000000) | val as u64;
+                *low = (*low & 0xFFFF_FFFF_0000_0000) | val as u64;
                 Ok(())
             }
             MTIMECMP_ADDRH => {
                 let mut high = self.mtimecmptmp.write().unwrap();
-                *high = (*high & 0x000000000_FFFFFFFF) | ((val as u64) << 32);
+                *high = (*high & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
 
                 let mut shared = self.mtimecmp.write().unwrap();
                 *shared = Duration::from_nanos(*high);
