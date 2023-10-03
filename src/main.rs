@@ -1,10 +1,11 @@
 mod bus;
 mod csr;
+mod dts;
 mod hart;
 mod ram;
+mod rom;
 mod rtc;
 mod see;
-mod dts;
 
 use std::sync::Arc;
 use std::thread;
@@ -13,6 +14,7 @@ use std::{env, fs};
 use crate::bus::Bus;
 use crate::hart::Hart;
 use crate::ram::Ram;
+use crate::rom::Rom;
 use crate::rtc::Rtc;
 
 fn main() {
@@ -20,14 +22,15 @@ fn main() {
     let threads = args.get(1).and_then(|x| x.parse::<u32>().ok()).unwrap_or(1);
 
     let text = fs::read("target/target.text").expect("no .text");
-    let data = fs::read("target/target.data").expect("no .data");
+    let dtb = dts::load();
 
-    let rom = Ram::new(text);
-    rom.write(0x1000, data);
+    let rom = Rom::new(text);
+    let ram = Ram::new();
+    ram.write(0, dtb);
 
     let rtc = Rtc::new();
 
-    let bus = Arc::new(Bus::new(rom, rtc));
+    let bus = Arc::new(Bus::new(rom, ram, rtc));
 
     let mut handles = vec![];
 

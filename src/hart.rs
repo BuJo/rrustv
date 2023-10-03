@@ -205,7 +205,7 @@ impl Hart {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
-                let val = self.bus.read_byte(addr).expect("ram being readable");
+                let val = self.bus.read_byte(addr).expect("address being readable");
                 self.set_register(rd, val as u32)
             }
             // sb Store Byte
@@ -218,7 +218,9 @@ impl Hart {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2 & 0xF) as u8;
-                self.bus.write_byte(addr, val).expect("ram being writeable")
+                self.bus
+                    .write_byte(addr, val)
+                    .expect("address being writeable")
             }
             // sw Store Word
             S {
@@ -230,7 +232,9 @@ impl Hart {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
-                self.bus.write_word(addr, val).expect("ram being writeable")
+                self.bus
+                    .write_word(addr, val)
+                    .expect("address being writeable")
             }
             // beq Branch ==
             B {
@@ -415,15 +419,17 @@ impl fmt::Display for InstructionFormat {
 mod tests {
     use crate::bus::Bus;
     use crate::ram::Ram;
+    use crate::rom::Rom;
     use crate::rtc::Rtc;
     use crate::Hart;
     use std::sync::Arc;
 
     #[test]
     fn addi() {
-        let rom = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let rom = Rom::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let ram = Ram::new();
         let rtc = Rtc::new();
-        let bus = Bus::new(rom, rtc);
+        let bus = Bus::new(rom, ram, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
@@ -431,9 +437,10 @@ mod tests {
 
     #[test]
     fn addi_neg() {
-        let rom = Ram::new(vec![0x93, 0x01, 0x81, 0xc1]);
+        let rom = Rom::new(vec![0x93, 0x01, 0x81, 0xc1]);
+        let ram = Ram::new();
         let rtc = Rtc::new();
-        let bus = Bus::new(rom, rtc);
+        let bus = Bus::new(rom, ram, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
@@ -441,7 +448,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let rom = Ram::new(vec![
+        let rom = Rom::new(vec![
             0x93, 0x00, 0x80, 0x3e, // li	ra,1000
             0x13, 0x81, 0x00, 0x7d, // addi	sp,ra,2000
             0x93, 0x01, 0x81, 0xc1, // addi	gp,sp,-1000
@@ -450,8 +457,9 @@ mod tests {
             0x13, 0x03, 0x00, 0x04, // li	t1,64
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
+        let ram = Ram::new();
         let rtc = Rtc::new();
-        let bus = Bus::new(rom, rtc);
+        let bus = Bus::new(rom, ram, rtc);
         let mut m = Hart::new(0, Arc::new(bus));
         m.tick();
         m.tick();

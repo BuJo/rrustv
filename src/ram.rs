@@ -7,9 +7,8 @@ pub struct Ram {
 }
 
 impl Ram {
-    pub fn new(code: Vec<u8>) -> Ram {
-        let mut ram = vec![0; DRAM_SIZE];
-        ram.splice(..code.len(), code.iter().cloned());
+    pub fn new() -> Ram {
+        let ram = vec![0; DRAM_SIZE];
 
         Self {
             ram: RwLock::new(ram),
@@ -37,21 +36,21 @@ impl Ram {
         shared[addr] = val
     }
 
-    pub fn read_word(&self, addr: usize) -> u32 {
-        let shared = self.ram.read().unwrap();
+    pub fn read_word(&self, addr: usize) -> Option<u32> {
+        let ram = self.ram.read().unwrap();
 
-        let ins: u32 = (shared[addr] as u32)
-            + ((shared[addr + 1] as u32) << 8)
-            + ((shared[addr + 2] as u32) << 16)
-            + ((shared[addr + 3] as u32) << 24);
-        ins
+        let ins: u32 = (*ram.get(addr)? as u32)
+            + ((*ram.get(addr + 1)? as u32) << 8)
+            + ((*ram.get(addr + 2)? as u32) << 16)
+            + ((*ram.get(addr + 3)? as u32) << 24);
+        Some(ins)
     }
 
-    pub fn read_byte(&self, addr: usize) -> u8 {
+    pub fn read_byte(&self, addr: usize) -> Option<u8> {
         let shared = self.ram.read().unwrap();
 
         //eprintln!("reading byte: {} at addr 0x{:04x}", self.ram[addr], addr);
-        shared[addr]
+        shared.get(addr).copied()
     }
 }
 
@@ -61,17 +60,19 @@ mod tests {
 
     #[test]
     fn init_read() {
-        let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
-        let i = ram.read_word(0);
+        let ram = Ram::new();
+        ram.write(0, vec![0x13, 0x81, 0x00, 0x7d]);
+        let i = ram.read_word(0).expect("read");
 
         assert_eq!(i, 0x7d008113, "x1 mismatch");
     }
 
     #[test]
     fn write_read_cycle() {
-        let ram = Ram::new(vec![0x13, 0x81, 0x00, 0x7d]);
+        let ram = Ram::new();
+        ram.write(0, vec![0x13, 0x81, 0x00, 0x7d]);
         ram.write_word(0, 0xdeadbeef);
-        let i = ram.read_word(0);
+        let i = ram.read_word(0).expect("read");
 
         assert_eq!(i, 0xdeadbeef, "dead beef");
     }

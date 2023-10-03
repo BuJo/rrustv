@@ -25,6 +25,6 @@ _loop:
 _out:
   ebreak
 
-.data
+.section .rodata
 helloworld:      .ascii "Hello World!\n"
 

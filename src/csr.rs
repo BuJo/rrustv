@@ -49,7 +49,6 @@ impl Csr {
         csr[MCYCLE] = 0; // actually per core, not hart
         csr[MINSTRET] = 0;
 
-
         csr
     }
 }
