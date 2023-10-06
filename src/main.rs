@@ -1,21 +1,12 @@
-mod bus;
-mod csr;
-mod dt;
-mod hart;
-mod ram;
-mod rom;
-mod rtc;
-mod see;
-
+use rriscv::bus::Bus;
+use rriscv::dt;
+use rriscv::hart::Hart;
+use rriscv::ram::Ram;
+use rriscv::rom::Rom;
+use rriscv::rtc::Rtc;
 use std::sync::Arc;
 use std::thread;
 use std::{env, fs};
-
-use crate::bus::Bus;
-use crate::hart::Hart;
-use crate::ram::Ram;
-use crate::rom::Rom;
-use crate::rtc::Rtc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

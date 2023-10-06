@@ -10,14 +10,14 @@ use crate::see;
 pub struct Hart {
     bus: Arc<Bus>,
     registers: [u32; 32],
-    pc: u32,
+    pub pc: u32,
     csr: Csr,
 
     stop: bool,
 }
 
 impl Hart {
-    pub(crate) fn new(id: u32, bus: Arc<Bus>) -> Self {
+    pub fn new(id: u32, bus: Arc<Bus>) -> Self {
         let mut m = Hart {
             bus,
             registers: [0; 32],
@@ -31,16 +31,16 @@ impl Hart {
         m
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.pc = 0;
         self.registers = [0; 32];
     }
 
-    pub(crate) fn stop(&mut self) {
+    pub fn stop(&mut self) {
         self.stop = true;
     }
 
-    pub(crate) fn tick(&mut self) -> bool {
+    pub fn tick(&mut self) -> bool {
         if self.stop {
             return false;
         }
@@ -263,6 +263,17 @@ impl Hart {
                 self.set_register(rd, self.pc + 4);
                 self.pc = self.pc.wrapping_add(imm as u32)
             }
+
+            // lui Load Upper Imm
+            U {
+                opcode: 0b0110111,
+                rd,
+                imm,
+            } => {
+                // one instruction length less
+                let val = (imm as u32) << 12;
+                self.set_register(rd, val)
+            }
             // auipc Add Upper Imm to PC
             U {
                 opcode: 0b0010111,
@@ -418,10 +429,10 @@ impl fmt::Display for InstructionFormat {
 #[cfg(test)]
 mod tests {
     use crate::bus::Bus;
+    use crate::hart::Hart;
     use crate::ram::Ram;
     use crate::rom::Rom;
     use crate::rtc::Rtc;
-    use crate::Hart;
     use std::sync::Arc;
 
     #[test]

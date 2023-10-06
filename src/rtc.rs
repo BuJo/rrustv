@@ -15,7 +15,7 @@ pub struct Rtc {
 }
 
 impl Rtc {
-    pub(crate) fn new() -> Rtc {
+    pub fn new() -> Rtc {
         Self {
             start: Instant::now(),
             mtimecmp: RwLock::new(Duration::MAX),
