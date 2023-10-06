@@ -24,21 +24,23 @@ flowchart LR
 
 ### Glossary
 
-|      | Definition                       |
-|------|----------------------------------|
-| HART | Hardware Thread                  |
-| CSR  | Control and Status Registers     |
-| SBI  | Supervisor Binary Interface      |
-| SEE  | Supervisor Execution Environment |
-| ISA  | Instruction Set Architecture     |
-| M    | Machine Mode                     |
-| XLEN | RISC-V 32 or 64 flavour          |
-| EEI  | Execution Environment Interface  |
-| ABI  | Application Binary Interface     |
-| RTC  | Real Time Clock                  |
-| DTS  | Device Tree Source               |
-| FTD  | Flattened Device Tree            |
-| DTB  | Device Tree Blob                 |
+|       | Definition                       |
+|-------|----------------------------------|
+| HART  | Hardware Thread                  |
+| CSR   | Control and Status Registers     |
+| SBI   | Supervisor Binary Interface      |
+| SEE   | Supervisor Execution Environment |
+| ISA   | Instruction Set Architecture     |
+| M     | Machine Mode                     |
+| XLEN  | RISC-V 32 or 64 flavour          |
+| EEI   | Execution Environment Interface  |
+| ABI   | Application Binary Interface     |
+| RTC   | Real Time Clock                  |
+| DTS   | Device Tree Source               |
+| FTD   | Flattened Device Tree            |
+| DTB   | Device Tree Blob                 |
+| HTIF  | Deprecated Host Device           |
+| FESVR | RISC-V Frontend Server           |
 
 ## Development
 
@@ -112,3 +114,9 @@ limitations under the License.
 * [Device Node Requirements](https://devicetree-specification.readthedocs.io/en/latest/chapter3-devicenodes.html)
 * [Device Tree Usage](https://elinux.org/Device_Tree_Usage)
 * [Introduction to Device Trees](https://www.nxp.com/docs/en/application-note/AN5125.pdf)
+
+### Validation
+
+* [RISCOF](https://riscof.readthedocs.io/en/latest/installation.html)
+* [HTIF](https://github.com/riscv-software-src/riscv-isa-sim/issues/364)
+* [Spike](https://chipyard.readthedocs.io/en/latest/Software/Spike.html)
