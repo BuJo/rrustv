@@ -1,4 +1,4 @@
-use rriscv::bus::Bus;
+use rriscv::bus::{Bus, RAM_ADDR};
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
@@ -38,15 +38,19 @@ fn load_elf(elf_file: &String, ram: Ram) -> Result<Ram, Box<dyn Error>> {
     let bin_data = fs::read(elf_file)?;
     let obj_file = object::File::parse(&*bin_data)?;
 
-
     if let Some(section) = obj_file.section_by_name(".text.init") {
-        ram.write((section.address() - 0x80000000) as usize, section.data()?.to_vec());
-    }
-    if let Some(section) = obj_file.section_by_name(".tohost") {
-        ram.write((section.address() - 0x80000000) as usize, section.data()?.to_vec());
+        ram.write(
+            section.address() as usize - RAM_ADDR,
+            section.data()?.to_vec(),
+        );
     }
     if let Some(section) = obj_file.section_by_name(".data") {
-        ram.write((section.address() - 0x80000000) as usize, section.data()?.to_vec());
+        ram.write(
+            section.address() as usize - RAM_ADDR,
+            section.data()?.to_vec(),
+        );
+    }
+
     }
 
     Ok(ram)

@@ -3,6 +3,8 @@ use crate::ram::Ram;
 use crate::rom::Rom;
 use crate::rtc::Rtc;
 
+pub static RAM_ADDR: usize = 0x80000000;
+
 pub struct Bus {
     rom: Rom,
     ram: Ram,
@@ -22,14 +24,14 @@ impl Bus {
     pub fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
             0x4000..=0x4FFF => self.rtc.write_word(addr, val),
-            0x80000000.. => self.ram.write_word(addr - 0x80000000, val).ok_or(MemoryFault),
+            0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val).ok_or(MemoryFault),
             _ => Err(MemoryFault),
         }
     }
 
     pub fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
         match addr {
-            0x8000.. => self.ram.write_byte(addr - 0x80000000, val).ok_or(MemoryFault),
+            0x8000.. => self.ram.write_byte(addr - RAM_ADDR, val).ok_or(MemoryFault),
             _ => Err(MemoryFault),
         }
     }
@@ -38,7 +40,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.rom.read_word(addr).or(Some(0)).ok_or(MemoryFault),
             0x4000..=0x4FFF => self.rtc.read_word(addr),
-            0x80000000.. => self.ram.read_word(addr - 0x80000000).ok_or(MemoryFault),
+            0x80000000.. => self.ram.read_word(addr - RAM_ADDR).ok_or(MemoryFault),
             _ => Err(MemoryFault),
         }
     }
@@ -46,7 +48,7 @@ impl Bus {
     pub fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_byte(addr).or(Some(0)).ok_or(MemoryFault),
-            0x80000000.. => self.ram.read_byte(addr - 0x80000000).ok_or(MemoryFault),
+            0x80000000.. => self.ram.read_byte(addr - RAM_ADDR).ok_or(MemoryFault),
             _ => Err(MemoryFault),
         }
     }
