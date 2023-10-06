@@ -1,12 +1,13 @@
+use std::{env, fs};
+use std::sync::Arc;
+use std::thread;
+
 use rriscv::bus::Bus;
 use rriscv::dt;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
-use std::sync::Arc;
-use std::thread;
-use std::{env, fs};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -30,7 +31,7 @@ fn main() {
 
         let handle = thread::spawn(move || {
             eprintln!("[{}] hart spawned", id);
-            let mut m = Hart::new(id, bus);
+            let mut m = Hart::new(id, 0, bus);
             for _ in 0..100 {
                 if !m.tick() {
                     break;

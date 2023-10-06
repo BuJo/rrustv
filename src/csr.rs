@@ -60,6 +60,7 @@ impl Index<usize> for Csr {
         &self.csrs[csr]
     }
 }
+
 impl IndexMut<usize> for Csr {
     fn index_mut(&mut self, csr: usize) -> &mut Self::Output {
         &mut self.csrs[csr]

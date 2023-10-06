@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+
 use InstructionFormat::{B, I, J, R, S, U};
 
 use crate::bus::Bus;
@@ -8,20 +10,23 @@ use crate::csr::Csr;
 use crate::see;
 
 pub struct Hart {
+    start_pc: u32,
+
     bus: Arc<Bus>,
     registers: [u32; 32],
-    pub pc: u32,
+    pc: u32,
     csr: Csr,
 
     stop: bool,
 }
 
 impl Hart {
-    pub fn new(id: u32, bus: Arc<Bus>) -> Self {
+    pub fn new(id: u32, pc: u32, bus: Arc<Bus>) -> Self {
         let mut m = Hart {
+            start_pc: pc,
             bus,
             registers: [0; 32],
-            pc: 0,
+            pc,
             csr: Csr::new(id),
             stop: false,
         };
@@ -32,7 +37,7 @@ impl Hart {
     }
 
     pub fn reset(&mut self) {
-        self.pc = 0;
+        self.pc = self.start_pc;
         self.registers = [0; 32];
     }
 
@@ -46,8 +51,8 @@ impl Hart {
         }
 
         let instruction = self.fetch_instruction();
-        let instruction = self.decode_instruction(instruction);
-        self.execute_instruction(instruction);
+        let decoded = self.decode_instruction(instruction);
+        self.execute_instruction(decoded, instruction);
 
         // simulate passing of time
         self.csr[csr::MCYCLE] += 3;
@@ -85,7 +90,7 @@ impl Hart {
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
-                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let rs2 = ((instruction >> 20) & 0b11111) as u8;
                 let funct7 = (instruction >> 25) as u8;
                 R {
                     opcode,
@@ -112,10 +117,16 @@ impl Hart {
             0b0100011 => {
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
-                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let rs2 = ((instruction >> 20) & 0b11111) as u8;
                 let imm7 = (instruction >> 7) & 0b11111;
-                let imm25 = instruction & 0xfff00000;
+                let imm25 = instruction & 0xfe000000;
                 let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
+                println!(
+                    "1: {:032b}: {:032b}:{:032b} {:0x}",
+                    instruction, imm25, imm7, imm
+                );
+                println!("2: {:032b}: {:07b}:{:05b}", instruction, imm25 >> 25, imm7);
+                println!("3: {:032b}: {:012b}", instruction, (imm25 + (imm7 << 20)) >> 20, );
                 S {
                     opcode,
                     funct3,
@@ -130,7 +141,7 @@ impl Hart {
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
                 let imm7 = (instruction >> 7) & 0b11111;
                 let imm25 = instruction & 0xfff00000;
-                let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
+                let imm = (((imm25 + (imm7 << 20)) as i32) as u64 >> 20) as i16;
                 B {
                     opcode,
                     funct3,
@@ -141,12 +152,12 @@ impl Hart {
             }
             0b1101111 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
-                let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
+                let imm = ((instruction & 0xfffff800) as i32 as u64 >> 12) as i32;
                 J { opcode, rd, imm }
             }
             0b0110111 | 0b0010111 => {
                 let rd = ((instruction >> 7) & 0x1F) as u8;
-                let imm = ((instruction & 0x7ffff800) as i32 as u64 >> 12) as i32;
+                let imm = ((instruction & 0xfffff800) as i32 as u64 >> 12) as i32;
                 U { opcode, rd, imm }
             }
             _ => {
@@ -162,13 +173,13 @@ impl Hart {
         }
     }
 
-    fn execute_instruction(&mut self, instruction: InstructionFormat) {
-        eprintln!(
-            "[{}] [0x{:04x}] {}",
-            self.csr[csr::MHARTID],
-            self.pc,
-            instruction
-        );
+    fn execute_instruction(&mut self, instruction: InstructionFormat, ins: u32) {
+        // eprintln!(
+        //     "[{}] [0x{:04x}] {}",
+        //     self.csr[csr::MHARTID],
+        //     self.pc,
+        //     instruction
+        // );
 
         match instruction {
             // RV32I
@@ -183,7 +194,9 @@ impl Hart {
                 funct7: 0x00,
             } => {
                 let val = self.get_register(rs1).wrapping_add(self.get_register(rs2));
-                self.set_register(rd, val)
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("add\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
             // ADD immediate
             I {
@@ -194,7 +207,12 @@ impl Hart {
                 imm,
             } => {
                 let val = self.get_register(rs1).wrapping_add(imm as u32);
-                self.set_register(rd, val)
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
             }
             // lb Load Byte
             I {
@@ -206,7 +224,9 @@ impl Hart {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.bus.read_byte(addr).expect("address being readable");
-                self.set_register(rd, val as u32)
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("lb\t{},{},{:#x}", reg(rd), reg(rs1), imm))
             }
             // sb Store Byte
             S {
@@ -220,7 +240,9 @@ impl Hart {
                 let val = self.get_register(rs2 & 0xF) as u8;
                 self.bus
                     .write_byte(addr, val)
-                    .expect("address being writeable")
+                    .expect("address being writeable");
+
+                self.dbgins(ins, format!("sb {},{},{:#x}", reg(rs1), reg(rs2), imm))
             }
             // sw Store Word
             S {
@@ -230,11 +252,14 @@ impl Hart {
                 rs2,
                 imm,
             } => {
+                println!("{:}", instruction);
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
                 self.bus
                     .write_word(addr, val)
-                    .expect("address being writeable")
+                    .expect("address being writeable");
+
+                self.dbgins(ins, format!("sw\t{},{}({})", reg(rs2), imm, reg(rs1)))
             }
             // beq Branch ==
             B {
@@ -253,6 +278,7 @@ impl Hart {
                         self.pc = self.pc.wrapping_add(imm as u32) - 1 - 4
                     }
                 }
+                self.dbgins(ins, format!("beq\t{},{},{}", reg(rs1), reg(rs2), imm))
             }
             // jal Jump And Link
             J {
@@ -261,7 +287,9 @@ impl Hart {
                 imm,
             } => {
                 self.set_register(rd, self.pc + 4);
-                self.pc = self.pc.wrapping_add(imm as u32)
+                self.pc = self.pc.wrapping_add(imm as u32);
+
+                self.dbgins(ins, format!("jal\t{},{:#x}", reg(rd), imm))
             }
 
             // lui Load Upper Imm
@@ -272,7 +300,9 @@ impl Hart {
             } => {
                 // one instruction length less
                 let val = (imm as u32) << 12;
-                self.set_register(rd, val)
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("lui\t{},{:#x}", reg(rd), imm))
             }
             // auipc Add Upper Imm to PC
             U {
@@ -281,8 +311,10 @@ impl Hart {
                 imm,
             } => {
                 // one instruction length less
-                let val = self.pc - 4 + ((imm as u32) << 12);
-                self.set_register(rd, val)
+                let val = (self.pc - 4) + ((imm as u32) << 12);
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
             }
 
             // ecall Environment Call
@@ -294,6 +326,8 @@ impl Hart {
             } => {
                 // We're unprivileged machine mode, no need to check SEDELEG
                 see::call(self);
+
+                self.dbgins(ins, "ecall".to_string())
             }
             // ebreak Environment Break
             I {
@@ -304,6 +338,8 @@ impl Hart {
             } => {
                 // Stop the hart, the Execution Environment has to take over
                 self.stop = true;
+
+                self.dbgins(ins, "ebreak".to_string())
             }
             _ => {
                 eprintln!(
@@ -315,10 +351,54 @@ impl Hart {
             }
         }
     }
+
+    fn dbgins(&self, ins: u32, asm: String) {
+        //eprintln!("[{}] {:}: {}", self.csr[csr::MHARTID], ins, asm);
+        eprintln!("{:08x}:\t{:08x}          \t{}", self.pc - 4, ins, asm)
+    }
+}
+
+fn reg(reg: u8) -> &'static str {
+    let regs = HashMap::from([
+        (0, "zero"),
+        (1, "ra"),
+        (2, "sp"),
+        (3, "gp"),
+        (4, "tp"),
+        (5, "t0"),
+        (6, "t1"),
+        (7, "t2"),
+        (8, "s0"),
+        (9, "s1"),
+        (10, "a0"),
+        (11, "a1"),
+        (12, "a2"),
+        (13, "a3"),
+        (14, "a4"),
+        (15, "a5"),
+        (16, "a6"),
+        (17, "a7"),
+        (18, "s2"),
+        (19, "s3"),
+        (20, "s4"),
+        (21, "s5"),
+        (22, "s6"),
+        (23, "s7"),
+        (24, "s8"),
+        (25, "s9"),
+        (26, "s10"),
+        (27, "s11"),
+        (28, "t3"),
+        (29, "t4"),
+        (30, "t5"),
+        (31, "t6"),
+    ]);
+
+    regs.get(&reg).unwrap_or(&"U")
 }
 
 #[derive(Debug)]
-enum InstructionFormat {
+pub enum InstructionFormat {
     R {
         opcode: u8,
         rd: u8,
@@ -428,12 +508,13 @@ impl fmt::Display for InstructionFormat {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::bus::Bus;
-    use crate::hart::Hart;
+    use crate::hart::{Hart, InstructionFormat};
     use crate::ram::Ram;
     use crate::rom::Rom;
     use crate::rtc::Rtc;
-    use std::sync::Arc;
 
     #[test]
     fn addi() {
@@ -441,7 +522,7 @@ mod tests {
         let ram = Ram::new();
         let rtc = Rtc::new();
         let bus = Bus::new(rom, ram, rtc);
-        let mut m = Hart::new(0, Arc::new(bus));
+        let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
@@ -452,7 +533,7 @@ mod tests {
         let ram = Ram::new();
         let rtc = Rtc::new();
         let bus = Bus::new(rom, ram, rtc);
-        let mut m = Hart::new(0, Arc::new(bus));
+        let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick();
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
@@ -471,7 +552,7 @@ mod tests {
         let ram = Ram::new();
         let rtc = Rtc::new();
         let bus = Bus::new(rom, ram, rtc);
-        let mut m = Hart::new(0, Arc::new(bus));
+        let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick();
         m.tick();
         m.tick();
@@ -486,5 +567,31 @@ mod tests {
         assert_eq!(m.get_register(4), 0, "x4 mismatch");
         assert_eq!(m.get_register(5), 1000, "x5 mismatch");
         assert_eq!(m.get_register(6), 0x40 + 4, "deadbeef");
+    }
+
+    #[test]
+    fn testdecode() {
+        let ins = 0x0181a023;
+        let rom = Rom::new(vec![]);
+        let ram = Ram::new();
+        let rtc = Rtc::new();
+        let bus = Bus::new(rom, ram, rtc);
+        let m = Hart::new(0, 0, Arc::new(bus));
+
+        let decoded: InstructionFormat = m.decode_instruction(ins);
+        match decoded {
+            InstructionFormat::R { .. } => assert!(false, "not S"),
+            InstructionFormat::I { .. } => assert!(false, "not S"),
+            InstructionFormat::S { opcode, funct3, rs1, rs2, imm } => {
+                assert_eq!(opcode, 0b0100011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rs1, 3, "rs1 wrong");
+                assert_eq!(rs2, 24, "rs2 wrong");
+                assert_eq!(imm, 0, "imm wrong");
+            }
+            InstructionFormat::B { .. } => assert!(false, "not S"),
+            InstructionFormat::U { .. } => assert!(false, "not S"),
+            InstructionFormat::J { .. } => assert!(false, "not S"),
+        }
     }
 }
