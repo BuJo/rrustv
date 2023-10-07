@@ -32,9 +32,13 @@ fn main() {
         let handle = thread::spawn(move || {
             eprintln!("[{}] hart spawned", id);
             let mut m = Hart::new(id, 0, bus);
-            for _ in 0..100 {
-                if !m.tick() {
-                    break;
+            for i in 0..100 {
+                match m.tick() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("exited at: {} ({:?})", i, e);
+                        break;
+                    }
                 }
             }
         });

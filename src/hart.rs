@@ -7,6 +7,7 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
 use crate::plic::Fault;
+use crate::plic::Fault::Halt;
 use crate::see;
 
 pub struct Hart<BT: Device> {
@@ -45,16 +46,15 @@ impl<BT: Device> Hart<BT> {
         self.stop = true;
     }
 
-    pub fn tick(&mut self) -> bool {
+    pub fn tick(&mut self) -> Result<(), Fault> {
         if self.stop {
-            return false;
+            return Err(Halt);
         }
 
         let res = self
             .fetch_instruction()
             .and_then(|instruction| self.decode_instruction(instruction))
-            .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins))
-            .is_ok();
+            .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
 
         // simulate passing of time
         self.csr[csr::MCYCLE] += 3;
@@ -257,11 +257,8 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
-                self.bus
-                    .write_word(addr, val)
-                    .expect("address being writeable");
-
-                self.dbgins(ins, format!("sw\t{},{}({})", reg(rs2), imm, reg(rs1)))
+                self.dbgins(ins, format!("sw\t{},{}({})", reg(rs2), imm, reg(rs1)));
+                return self.bus.write_word(addr, val);
             }
             // beq Branch ==
             B {

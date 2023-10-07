@@ -10,6 +10,7 @@ use rriscv::device::Device;
 use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::htif::Htif;
+use rriscv::plic::Fault;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
 
@@ -48,13 +49,17 @@ fn main() {
         tohost = Range { start, end };
     }
 
+
     let bus = Arc::new(bus);
 
     let mut m = Hart::new(0, pc as u32, bus.clone());
     for i in 0..10000 {
-        if !m.tick() {
-            eprintln!("exited at: {}", i);
-            break;
+        match m.tick() {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("exited at: {} ({:?})", i, e);
+                break;
+            }
         }
     }
 
