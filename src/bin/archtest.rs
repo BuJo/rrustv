@@ -68,7 +68,7 @@ fn main() {
     }
 }
 
-fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File<>) {
+fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File) {
     let mut f = File::create(sig_file).expect("sigfile open");
 
     let mut begin_signature = 0;
@@ -81,15 +81,13 @@ fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File<>) {
         }
     }
 
-    let mut i = 1u32;
-    for addr in begin_signature..end_signature {
-        let byte = bus.read_byte(addr).expect("ram");
-        f.write_all(format!("{:02x}", byte).as_bytes())
+    let mut addr = begin_signature;
+    while addr < end_signature {
+        let word = bus.read_word(addr).expect("ram");
+        f.write_all(format!("{:08x}", word).as_bytes())
             .expect("writing sig");
 
-        if i > 0 && i % 4 == 0 {
-            f.write_all("\n".as_bytes()).expect("writing sig");
-        }
-        i += 1;
+        f.write_all("\n".as_bytes()).expect("writing sig");
+        addr += 4;
     }
 }
