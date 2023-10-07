@@ -12,6 +12,7 @@ use rriscv::hart::Hart;
 use rriscv::htif::Htif;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
+use rriscv::rtc::Rtc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -46,6 +47,8 @@ fn main() {
         bus.map(htif, Range { start, end });
     }
 
+    let rtc = Rtc::new();
+    bus.map(rtc, 0x4000..0x4020);
 
     let bus = Arc::new(bus);
 
