@@ -38,7 +38,7 @@ impl Rtc {
                 *shared = Duration::from_nanos(*high);
                 Ok(())
             }
-            _ => Err(Fault::MemoryFault),
+            _ => Err(Fault::MemoryFault(addr)),
         }
     }
 
@@ -50,7 +50,7 @@ impl Rtc {
             MTIMECMP_ADDRH => Ok(0xFFFFFFFF),
             MTIME_ADDR => Ok((now.as_nanos() & 0x0FFFFFFFFu128) as u32),
             MTIME_ADDRH => Ok(((now.as_nanos() >> 32) & 0x0FFFFFFFFu128) as u32),
-            _ => Err(Fault::MemoryFault),
+            _ => Err(Fault::MemoryFault(addr)),
         }
     }
 }
