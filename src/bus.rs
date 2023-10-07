@@ -1,4 +1,6 @@
-use crate::bus::Fault::MemoryFault;
+use crate::device::Device;
+use crate::plic::Fault;
+use crate::plic::Fault::MemoryFault;
 use crate::ram::Ram;
 use crate::rom::Rom;
 use crate::rtc::Rtc;
@@ -11,17 +13,14 @@ pub struct Bus {
     rtc: Rtc,
 }
 
-#[derive(Debug)]
-pub enum Fault {
-    MemoryFault(usize),
-}
-
 impl Bus {
     pub fn new(rom: Rom, ram: Ram, rtc: Rtc) -> Bus {
         Self { rom, ram, rtc }
     }
+}
 
-    pub fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+impl Device for Bus {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
             0x4000..=0x4FFF => self.rtc.write_word(addr, val),
             0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
@@ -29,14 +28,14 @@ impl Bus {
         }
     }
 
-    pub fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
         match addr {
-            0x8000.. => self.ram.write_byte(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
+            0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
             _ => Err(MemoryFault(addr)),
         }
     }
 
-    pub fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_word(addr).or(Some(0)).ok_or(MemoryFault(addr)),
             0x4000..=0x4FFF => self.rtc.read_word(addr),
@@ -45,7 +44,7 @@ impl Bus {
         }
     }
 
-    pub fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_byte(addr).or(Some(0)).ok_or(MemoryFault(addr)),
             0x80000000.. => self.ram.read_byte(addr - RAM_ADDR).ok_or(MemoryFault(addr)),
@@ -57,6 +56,7 @@ impl Bus {
 #[cfg(test)]
 mod tests {
     use crate::bus::Bus;
+    use crate::device::Device;
     use crate::ram::Ram;
     use crate::rom::Rom;
     use crate::rtc::Rtc;
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn writeable_ram() {
         let bus = bus();
-        let can_write = bus.write_word(0x8000, 0x1).is_ok();
+        let can_write = bus.write_word(0x80000000, 0x1).is_ok();
 
         assert_eq!(can_write, true, "ram should be writeable");
     }

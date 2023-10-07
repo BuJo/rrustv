@@ -1,90 +1,73 @@
-use std::{env, fs, panic};
-use std::error::Error;
+use std::{env, fs};
 use std::fs::File;
 use std::io::Write;
+use std::ops::Range;
 use std::sync::Arc;
 
-use object::{Object, ObjectSection, ObjectSymbol};
+use object::{Object, ObjectSection};
 
-use rriscv::bus::{Bus, RAM_ADDR};
+use rriscv::device::Device;
+use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
+use rriscv::htif::Htif;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
-use rriscv::rtc::Rtc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let elf_file = args.get(1).expect("expect elf file");
     let sig_file = args.get(2);
 
-    let text = fs::read(elf_file).expect("no .text");
+    let mut bus = DynBus::new();
+    let mut pc: usize = 0;
+    let mut tohost: Range<usize> = 0..0;
 
-    let rom = Rom::new(text);
-    let ram = Ram::new();
+    let bin_data = fs::read(elf_file).expect("file");
+    let elf = object::File::parse(&*bin_data).expect("parsing");
+    if let Some(section) = elf.section_by_name(".text.init") {
+        let start = section.address() as usize;
+        let end = start + section.size() as usize;
+        let rom = Rom::new(section.data().expect("data").to_vec());
+        bus.map(rom, Range { start, end });
+        pc = start;
+    }
 
-    let (ram, b, e) = load_elf(elf_file, ram).expect("elf");
+    if let Some(section) = elf.section_by_name(".data") {
+        let start = section.address() as usize;
+        let end = start + section.size() as usize;
+        let ram = Ram::new();
+        ram.write(0, section.data().expect("data").to_vec());
+        bus.map(ram, Range { start, end });
+    }
 
-    let rtc = Rtc::new();
+    if let Some(section) = elf.section_by_name(".tohost") {
+        let start = section.address() as usize;
+        let end = start + section.size() as usize;
+        let htif = Htif::new();
+        bus.map(htif, Range { start, end });
+        tohost = Range { start, end };
+    }
 
-    let bus = Arc::new(Bus::new(rom, ram, rtc));
+    let bus = Arc::new(bus);
 
-    let result = panic::catch_unwind(|| {
-        let mut m = Hart::new(0, RAM_ADDR as u32, bus.clone());
-        for i in 0..10000 {
-            if !m.tick() {
-                eprintln!("exited at: {}", i);
-                break;
-            }
+    let mut m = Hart::new(0, pc as u32, bus.clone());
+    for i in 0..10000 {
+        if !m.tick() {
+            eprintln!("exited at: {}", i);
+            break;
         }
-    });
-    match result {
-        Ok(_) => println!("was ok"),
-        Err(_) => println!("was not ok"),
     }
 
     if let Some(sig_file) = sig_file {
-        write_signature(sig_file, bus.clone(), b, e);
+        write_signature(sig_file, bus.clone(), tohost);
     }
 }
 
-fn load_elf(elf_file: &String, ram: Ram) -> Result<(Ram, usize, usize), Box<dyn Error>> {
-    let bin_data = fs::read(elf_file)?;
-    let obj_file = object::File::parse(&*bin_data)?;
-
-    if let Some(section) = obj_file.section_by_name(".text.init") {
-        ram.write(
-            section.address() as usize - RAM_ADDR,
-            section.data()?.to_vec(),
-        );
-    }
-    if let Some(section) = obj_file.section_by_name(".data") {
-        ram.write(
-            section.address() as usize - RAM_ADDR,
-            section.data()?.to_vec(),
-        );
-    }
-
-    let mut begin_signature: usize = 0;
-    let mut end_signature: usize = 0;
-
-    for symbol in obj_file.symbols() {
-        match symbol.name() {
-            Ok("begin_signature") => begin_signature = symbol.address() as usize,
-            Ok("end_signature") => end_signature = symbol.address() as usize,
-            _ => {}
-        }
-    }
-
-    Ok((ram, begin_signature, end_signature))
-}
-
-fn write_signature(sig_file: &String, bus: Arc<Bus>, begin: usize, end: usize) {
-    //println!("sig betwen {:x}->{:x}", begin, end);
-
+fn write_signature(sig_file: &String, bus: Arc<DynBus>, range: Range<usize>) {
     let mut f = File::create(sig_file).expect("sigfile open");
 
     let mut i = 1u32;
-    for addr in begin..=end {
+    for addr in range {
         let byte = bus.read_byte(addr).expect("ram");
         f.write(format!("{:02x}", byte).as_bytes())
             .expect("writing sig");

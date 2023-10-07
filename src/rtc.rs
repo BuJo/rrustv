@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use crate::bus::Fault;
+use crate::plic::Fault;
 
 pub const MTIMECMP_ADDR: usize = 0x4000;
 pub const MTIMECMP_ADDRH: usize = 0x4004;

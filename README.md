@@ -7,6 +7,7 @@ flowchart LR
     hart[HART] --> bus{bus}
     bus --> rom(ROM)
     bus --> ram(RAM)
+    bus --> htif(HTIF)
     ram --> dt(DTB)
     bus --> rtc(RTC)
     hart --> csr(CSR)
@@ -24,23 +25,24 @@ flowchart LR
 
 ### Glossary
 
-|       | Definition                       |
-|-------|----------------------------------|
-| HART  | Hardware Thread                  |
-| CSR   | Control and Status Registers     |
-| SBI   | Supervisor Binary Interface      |
-| SEE   | Supervisor Execution Environment |
-| ISA   | Instruction Set Architecture     |
-| M     | Machine Mode                     |
-| XLEN  | RISC-V 32 or 64 flavour          |
-| EEI   | Execution Environment Interface  |
-| ABI   | Application Binary Interface     |
-| RTC   | Real Time Clock                  |
-| DTS   | Device Tree Source               |
-| FTD   | Flattened Device Tree            |
-| DTB   | Device Tree Blob                 |
-| HTIF  | Deprecated Host Device           |
-| FESVR | RISC-V Frontend Server           |
+|       | Definition                          |
+|-------|-------------------------------------|
+| HART  | Hardware Thread                     |
+| CSR   | Control and Status Registers        |
+| SBI   | Supervisor Binary Interface         |
+| SEE   | Supervisor Execution Environment    |
+| ISA   | Instruction Set Architecture        |
+| M     | Machine Mode                        |
+| XLEN  | RISC-V 32 or 64 flavour             |
+| EEI   | Execution Environment Interface     |
+| ABI   | Application Binary Interface        |
+| RTC   | Real Time Clock                     |
+| DTS   | Device Tree Source                  |
+| FTD   | Flattened Device Tree               |
+| DTB   | Device Tree Blob                    |
+| HTIF  | Deprecated Host Device              |
+| FESVR | RISC-V Frontend Server              |
+| PLIC  | Platform-Level Interrupt Controller |
 
 ## Development
 

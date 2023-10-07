@@ -3,15 +3,16 @@ use std::sync::Arc;
 
 use InstructionFormat::{B, I, J, R, S, U};
 
-use crate::bus::{Bus, Fault};
 use crate::csr;
 use crate::csr::Csr;
+use crate::device::Device;
+use crate::plic::Fault;
 use crate::see;
 
-pub struct Hart {
+pub struct Hart<BT: Device> {
     start_pc: u32,
 
-    bus: Arc<Bus>,
+    bus: Arc<BT>,
     registers: [u32; 32],
     pc: u32,
     csr: Csr,
@@ -19,8 +20,8 @@ pub struct Hart {
     stop: bool,
 }
 
-impl Hart {
-    pub fn new(id: u32, pc: u32, bus: Arc<Bus>) -> Self {
+impl<BT: Device> Hart<BT> {
+    pub fn new(id: u32, pc: u32, bus: Arc<BT>) -> Self {
         let mut m = Hart {
             start_pc: pc,
             bus,
@@ -586,7 +587,7 @@ mod tests {
         assert_eq!(m.get_register(6), 0x40 + 4, "deadbeef");
     }
 
-    fn hart() -> Hart {
+    fn hart() -> Hart<Bus> {
         let rom = Rom::new(vec![]);
         let ram = Ram::new();
         let rtc = Rtc::new();
@@ -711,5 +712,46 @@ mod tests {
         m.execute_instruction(decoded, ins).expect("execute");
 
         assert_eq!(m.pc, 0x800032bc);
+    }
+
+
+    #[test]
+    fn test_auipc_800032c0() {
+        let ins = 0x00001f17;
+        let mut m = hart();
+        m.pc = 0x800032c0 + 4;
+
+        let decoded = m.decode_instruction(ins).expect("decode").1;
+        match decoded {
+            InstructionFormat::U { opcode, rd, imm } => {
+                assert_eq!(opcode, 0b0010111, "opcode wrong");
+                assert_eq!(rd, treg("t5"), "rd wrong");
+                assert_eq!(imm, 0x1, "imm wrong");
+            }
+            _ => assert!(false, "not auipc"),
+        }
+
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.get_register(treg("t5")), 0x800032c0 + (0x1 << 12));
+    }
+
+
+    #[test]
+    fn test_magic_800032c8() {
+        let ins = 0xd41f2023;
+        let m = hart();
+
+        let decoded = m.decode_instruction(ins).expect("decode").1;
+        match decoded {
+            InstructionFormat::S { opcode, funct3, rs1, rs2, imm } => {
+                assert_eq!(opcode, 0b0100011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rs1, treg("a4"), "rs1 wrong");
+                assert_eq!(rs2, treg("ra"), "rs2 wrong");
+                assert_eq!(imm, -704, "imm wrong");
+            }
+            _ => assert!(false, "not auipc"),
+        }
     }
 }

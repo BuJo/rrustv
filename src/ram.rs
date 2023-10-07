@@ -15,6 +15,10 @@ impl Ram {
         }
     }
 
+    pub fn size(&self) -> usize {
+        return DRAM_SIZE;
+    }
+
     pub fn write(&self, addr: usize, code: Vec<u8>) -> Option<()> {
         let mut shared = self.ram.write().unwrap();
 
