@@ -53,7 +53,8 @@ fn main() {
     let bus = Arc::new(bus);
 
     let mut m = Hart::new(0, pc as u32, bus.clone());
-    for i in 0..10000 {
+    let mut i = 0;
+    loop {
         match m.tick() {
             Ok(_) => {}
             Err(e) => {
@@ -61,6 +62,12 @@ fn main() {
                 break;
             }
         }
+
+        if i >= 1_000_000 {
+            eprintln!("endless, killing");
+            break;
+        }
+        i+=1;
     }
 
     if let Some(sig_file) = sig_file {

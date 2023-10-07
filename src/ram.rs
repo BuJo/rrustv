@@ -75,6 +75,7 @@ impl Device for Ram {
 
 #[cfg(test)]
 mod tests {
+    use crate::device::Device;
     use crate::ram::Ram;
 
     #[test]
@@ -90,7 +91,7 @@ mod tests {
     fn write_read_cycle() {
         let ram = Ram::new();
         ram.write(0, vec![0x13, 0x81, 0x00, 0x7d]);
-        ram.write_word(0, 0xdeadbeef);
+        ram.write_word(0, 0xdeadbeef).expect("written");
         let i = ram.read_word(0).expect("read");
 
         assert_eq!(i, 0xdeadbeef, "dead beef");
