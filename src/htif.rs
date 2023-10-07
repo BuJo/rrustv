@@ -10,6 +10,12 @@ impl Htif {
     }
 }
 
+impl Default for Htif {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Device for Htif {
     fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
         match addr {

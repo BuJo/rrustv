@@ -25,6 +25,12 @@ impl Rtc {
     }
 }
 
+impl Default for Rtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Device for Rtc {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {

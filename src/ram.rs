@@ -20,7 +20,7 @@ impl Ram {
     }
 
     pub fn size(&self) -> usize {
-        return DRAM_SIZE;
+        DRAM_SIZE
     }
 
     pub fn write(&self, addr: usize, code: Vec<u8>) -> Option<()> {
@@ -28,6 +28,12 @@ impl Ram {
 
         shared.splice(addr..(addr + code.len()), code.iter().cloned());
         Some(())
+    }
+}
+
+impl Default for Ram {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

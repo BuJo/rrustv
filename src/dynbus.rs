@@ -1,26 +1,47 @@
 use std::ops::Range;
+use std::sync::RwLock;
 
 use crate::device::Device;
 use crate::plic::Fault;
 use crate::plic::Fault::MemoryFault;
 
+type DeviceList = Vec<(Range<usize>, Box<dyn Device>)>;
+
 pub struct DynBus {
-    devices: Vec<(Range<usize>, Box<dyn Device>)>,
+    devices: RwLock<DeviceList>,
 }
+
+// Safety: Every interaction is gated through the RwLock protecting the devices
+// additionally the bus should not change while the machine is running?  Hot plugging
+// RAM or CPUs should be incredibly rare...
+unsafe impl Send for DynBus {}
+
+unsafe impl Sync for DynBus {}
 
 impl DynBus {
     pub fn new() -> DynBus {
-        Self { devices: vec![] }
+        Self { devices: RwLock::new(vec![]) }
     }
 
     pub fn map(&mut self, device: impl Device + 'static, range: Range<usize>) {
-        self.devices.push((range, Box::new(device)));
+        let mut devices = self.devices.write().unwrap();
+
+        devices.push((range, Box::new(device)));
     }
 }
 
+impl Default for DynBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 impl Device for DynBus {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
-        for (range, device) in &self.devices {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
             if range.contains(&addr) {
                 return device.write_word(addr - range.start, val);
             }
@@ -29,7 +50,9 @@ impl Device for DynBus {
     }
 
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
-        for (range, device) in &self.devices {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
             if range.contains(&addr) {
                 return device.write_byte(addr - range.start, val);
             }
@@ -38,7 +61,9 @@ impl Device for DynBus {
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
-        for (range, device) in &self.devices {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
             if range.contains(&addr) {
                 return device.read_word(addr - range.start);
             }
@@ -47,7 +72,9 @@ impl Device for DynBus {
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
-        for (range, device) in &self.devices {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
             if range.contains(&addr) {
                 return device.read_byte(addr - range.start);
             }

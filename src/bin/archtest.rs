@@ -81,12 +81,11 @@ fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File<>) {
     let mut i = 1u32;
     for addr in begin_signature..end_signature {
         let byte = bus.read_byte(addr).expect("ram");
-        f.write(format!("{:02x}", byte).as_bytes())
+        f.write_all(format!("{:02x}", byte).as_bytes())
             .expect("writing sig");
 
         if i > 0 && i % 4 == 0 {
-            //println!("{}->{:x}", i, addr);
-            f.write("\n".as_bytes()).expect("writing sig");
+            f.write_all("\n".as_bytes()).expect("writing sig");
         }
         i += 1;
     }
