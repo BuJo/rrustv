@@ -3,26 +3,23 @@ use crate::plic::Fault;
 use crate::plic::Fault::MemoryFault;
 use crate::ram::Ram;
 use crate::rom::Rom;
-use crate::rtc::Rtc;
 
 pub static RAM_ADDR: usize = 0x80000000;
 
 pub struct Bus {
     rom: Rom,
     ram: Ram,
-    rtc: Rtc,
 }
 
 impl Bus {
-    pub fn new(rom: Rom, ram: Ram, rtc: Rtc) -> Bus {
-        Self { rom, ram, rtc }
+    pub fn new(rom: Rom, ram: Ram) -> Bus {
+        Self { rom, ram }
     }
 }
 
 impl Device for Bus {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
-            0x4000..=0x4FFF => self.rtc.write_word(addr, val),
             0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
             _ => Err(MemoryFault(addr)),
         }
@@ -38,7 +35,6 @@ impl Device for Bus {
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_word(addr).or(Some(0)).ok_or(MemoryFault(addr)),
-            0x4000..=0x4FFF => self.rtc.read_word(addr),
             0x80000000.. => self.ram.read_word(addr - RAM_ADDR).ok_or(MemoryFault(addr)),
             _ => Err(MemoryFault(addr)),
         }
@@ -59,14 +55,12 @@ mod tests {
     use crate::device::Device;
     use crate::ram::Ram;
     use crate::rom::Rom;
-    use crate::rtc::Rtc;
 
     fn bus() -> Bus {
         let rom = Rom::new(vec![1, 2, 3, 4]);
         let ram = Ram::new();
-        let rtc = Rtc::new();
 
-        Bus::new(rom, ram, rtc)
+        Bus::new(rom, ram)
     }
 
     #[test]

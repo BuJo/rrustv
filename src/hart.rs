@@ -519,7 +519,6 @@ mod tests {
     use crate::hart::{Hart, InstructionFormat, REGMAP};
     use crate::ram::Ram;
     use crate::rom::Rom;
-    use crate::rtc::Rtc;
 
     fn treg(reg: &str) -> u8 {
         for (i, s) in REGMAP {
@@ -534,10 +533,9 @@ mod tests {
     fn addi() {
         let rom = Rom::new(vec![0x13, 0x81, 0x00, 0x7d]);
         let ram = Ram::new();
-        let rtc = Rtc::new();
-        let bus = Bus::new(rom, ram, rtc);
+        let bus = Bus::new(rom, ram);
         let mut m = Hart::new(0, 0, Arc::new(bus));
-        m.tick();
+        m.tick().expect("tick");
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
     }
 
@@ -545,10 +543,9 @@ mod tests {
     fn addi_neg() {
         let rom = Rom::new(vec![0x93, 0x01, 0x81, 0xc1]);
         let ram = Ram::new();
-        let rtc = Rtc::new();
-        let bus = Bus::new(rom, ram, rtc);
+        let bus = Bus::new(rom, ram);
         let mut m = Hart::new(0, 0, Arc::new(bus));
-        m.tick();
+        m.tick().expect("tick");
         assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
     }
 
@@ -564,16 +561,11 @@ mod tests {
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
         let ram = Ram::new();
-        let rtc = Rtc::new();
-        let bus = Bus::new(rom, ram, rtc);
+        let bus = Bus::new(rom, ram);
         let mut m = Hart::new(0, 0, Arc::new(bus));
-        m.tick();
-        m.tick();
-        m.tick();
-        m.tick();
-        m.tick();
-        m.tick();
-        m.tick();
+        for _ in 0..=6 {
+            m.tick().expect("tick");
+        }
         assert_eq!(m.get_register(0), 0, "zero register must be zero");
         assert_eq!(m.get_register(1), 1000, "x1 mismatch");
         assert_eq!(m.get_register(2), 3000, "x2 mismatch");
@@ -586,8 +578,7 @@ mod tests {
     fn hart() -> Hart<Bus> {
         let rom = Rom::new(vec![]);
         let ram = Ram::new();
-        let rtc = Rtc::new();
-        let bus = Bus::new(rom, ram, rtc);
+        let bus = Bus::new(rom, ram);
         Hart::new(0, 0, Arc::new(bus))
     }
 

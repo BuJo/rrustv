@@ -10,7 +10,6 @@ use rriscv::device::Device;
 use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::htif::Htif;
-use rriscv::plic::Fault;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
 
