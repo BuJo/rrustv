@@ -1,5 +1,9 @@
 use std::sync::RwLock;
 
+use crate::device::Device;
+use crate::plic::Fault;
+use crate::plic::Fault::MemoryFault;
+
 pub struct Rom {
     data: RwLock<Vec<u8>>,
 }
@@ -10,27 +14,37 @@ impl Rom {
             data: RwLock::new(data),
         }
     }
+}
 
-    pub fn read_word(&self, addr: usize) -> Option<u32> {
-        let data = self.data.read().unwrap();
-
-        let ins: u32 = (*data.get(addr)? as u32)
-            + ((*data.get(addr + 1)? as u32) << 8)
-            + ((*data.get(addr + 2)? as u32) << 16)
-            + ((*data.get(addr + 3)? as u32) << 24);
-        Some(ins)
+impl Device for Rom {
+    fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
+        Err(MemoryFault(addr))
     }
 
-    pub fn read_byte(&self, addr: usize) -> Option<u8> {
+    fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
+        Err(MemoryFault(addr))
+    }
+
+    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let data = self.data.read().unwrap();
 
-        //eprintln!("reading byte: {} at addr 0x{:04x}", self.ram[addr], addr);
-        data.get(addr).copied()
+        let ins: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u32) << 8)
+            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u32) << 16)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u32) << 24);
+        Ok(ins)
+    }
+
+    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+        let data = self.data.read().unwrap();
+
+        data.get(addr).copied().ok_or(MemoryFault(addr))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::device::Device;
     use crate::rom::Rom;
 
     #[test]

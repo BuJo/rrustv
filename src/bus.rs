@@ -20,30 +20,30 @@ impl Bus {
 impl Device for Bus {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
-            0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
+            0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val),
             _ => Err(MemoryFault(addr)),
         }
     }
 
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
         match addr {
-            0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val).ok_or(MemoryFault(addr)),
+            0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val),
             _ => Err(MemoryFault(addr)),
         }
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         match addr {
-            0x0000..=0x1FFF => self.rom.read_word(addr).or(Some(0)).ok_or(MemoryFault(addr)),
-            0x80000000.. => self.ram.read_word(addr - RAM_ADDR).ok_or(MemoryFault(addr)),
+            0x0000..=0x1FFF => self.rom.read_word(addr),
+            0x80000000.. => self.ram.read_word(addr - RAM_ADDR),
             _ => Err(MemoryFault(addr)),
         }
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
         match addr {
-            0x0000..=0x1FFF => self.rom.read_byte(addr).or(Some(0)).ok_or(MemoryFault(addr)),
-            0x80000000.. => self.ram.read_byte(addr - RAM_ADDR).ok_or(MemoryFault(addr)),
+            0x0000..=0x1FFF => self.rom.read_byte(addr),
+            0x80000000.. => self.ram.read_byte(addr - RAM_ADDR),
             _ => Err(MemoryFault(addr)),
         }
     }

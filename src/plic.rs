@@ -2,4 +2,5 @@
 pub enum Fault {
     MemoryFault(usize),
     Halt,
+    Unimplemented,
 }

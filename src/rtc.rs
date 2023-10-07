@@ -1,6 +1,7 @@
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+use crate::device::Device;
 use crate::plic::Fault;
 
 pub const MTIMECMP_ADDR: usize = 0x4000;
@@ -22,8 +23,10 @@ impl Rtc {
             mtimecmptmp: RwLock::new(u64::MAX),
         }
     }
+}
 
-    pub fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+impl Device for Rtc {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
             MTIMECMP_ADDR => {
                 let mut low = self.mtimecmptmp.write().unwrap();
@@ -42,7 +45,11 @@ impl Rtc {
         }
     }
 
-    pub fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
+        Err(Fault::Unimplemented)
+    }
+
+    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let now = self.start.elapsed();
 
         match addr {
@@ -52,5 +59,9 @@ impl Rtc {
             MTIME_ADDRH => Ok(((now.as_nanos() >> 32) & 0x0FFFFFFFFu128) as u32),
             _ => Err(Fault::MemoryFault(addr)),
         }
+    }
+
+    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
+        Err(Fault::Unimplemented)
     }
 }

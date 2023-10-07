@@ -3,8 +3,6 @@ use std::ops::Range;
 use crate::device::Device;
 use crate::plic::Fault;
 use crate::plic::Fault::MemoryFault;
-use crate::ram::Ram;
-use crate::rom::Rom;
 
 pub struct DynBus {
     devices: Vec<(Range<usize>, Box<dyn Device>)>,
@@ -55,42 +53,6 @@ impl Device for DynBus {
             }
         }
         Err(MemoryFault(addr))
-    }
-}
-
-impl Device for Ram {
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
-        self.write_word(addr, val).ok_or(MemoryFault(addr))
-    }
-
-    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
-        self.write_byte(addr, val).ok_or(MemoryFault(addr))
-    }
-
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
-        self.read_word(addr).ok_or(MemoryFault(addr))
-    }
-
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
-        self.read_byte(addr).ok_or(MemoryFault(addr))
-    }
-}
-
-impl Device for Rom {
-    fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
-        Err(MemoryFault(addr))
-    }
-
-    fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(MemoryFault(addr))
-    }
-
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
-        self.read_word(addr).ok_or(MemoryFault(addr))
-    }
-
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
-        self.read_byte(addr).ok_or(MemoryFault(addr))
     }
 }
 

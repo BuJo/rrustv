@@ -1,9 +1,13 @@
 use std::sync::RwLock;
 
+use crate::device::Device;
+use crate::plic::Fault;
+use crate::plic::Fault::MemoryFault;
+
 pub const DRAM_SIZE: usize = 1024 * 1024 * 128; // 128MiB
 
 pub struct Ram {
-    ram: RwLock<Vec<u8>>,
+    data: RwLock<Vec<u8>>,
 }
 
 impl Ram {
@@ -11,7 +15,7 @@ impl Ram {
         let ram = vec![0; DRAM_SIZE];
 
         Self {
-            ram: RwLock::new(ram),
+            data: RwLock::new(ram),
         }
     }
 
@@ -20,45 +24,46 @@ impl Ram {
     }
 
     pub fn write(&self, addr: usize, code: Vec<u8>) -> Option<()> {
-        let mut shared = self.ram.write().unwrap();
+        let mut shared = self.data.write().unwrap();
 
         shared.splice(addr..(addr + code.len()), code.iter().cloned());
         Some(())
     }
+}
 
-    pub fn write_word(&self, addr: usize, word: u32) -> Option<()> {
-        let mut shared = self.ram.write().unwrap();
+impl Device for Ram {
+    fn write_word(&self, addr: usize, word: u32) -> Result<(), Fault> {
+        let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr)?) = (word & 0xFF) as u8;
-        *(shared.get_mut(addr + 1)?) = ((word >> 8) & 0xFF) as u8;
-        *(shared.get_mut(addr + 2)?) = ((word >> 16) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3)?) = ((word >> 24) & 0xFF) as u8;
+        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (word & 0xFF) as u8;
+        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((word >> 8) & 0xFF) as u8;
+        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((word >> 16) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((word >> 24) & 0xFF) as u8;
 
-        Some(())
+        Ok(())
     }
 
-    pub fn write_byte(&self, addr: usize, val: u8) -> Option<()> {
-        let mut shared = self.ram.write().unwrap();
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+        let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr)?) = val;
-        Some(())
+        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = val;
+        Ok(())
     }
 
-    pub fn read_word(&self, addr: usize) -> Option<u32> {
-        let ram = self.ram.read().unwrap();
+    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+        let data = self.data.read().unwrap();
 
-        let ins: u32 = (*ram.get(addr)? as u32)
-            + ((*ram.get(addr + 1)? as u32) << 8)
-            + ((*ram.get(addr + 2)? as u32) << 16)
-            + ((*ram.get(addr + 3)? as u32) << 24);
-        Some(ins)
+        let ins: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u32) << 8)
+            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u32) << 16)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u32) << 24);
+        Ok(ins)
     }
 
-    pub fn read_byte(&self, addr: usize) -> Option<u8> {
-        let shared = self.ram.read().unwrap();
+    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+        let data = self.data.read().unwrap();
 
-        //eprintln!("reading byte: {} at addr 0x{:04x}", self.ram[addr], addr);
-        shared.get(addr).copied()
+        data.get(addr).copied().ok_or(MemoryFault(addr))
     }
 }
 
