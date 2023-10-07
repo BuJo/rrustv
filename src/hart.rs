@@ -353,7 +353,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 // one instruction length less
-                let val = (self.pc - 4) + ((imm as u32) << 12);
+                let val = (self.pc - 4).wrapping_add((imm as u32) << 12);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
