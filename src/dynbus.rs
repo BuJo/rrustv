@@ -1,9 +1,8 @@
 use std::ops::Range;
 
 use crate::device::Device;
-use crate::htif::Htif;
 use crate::plic::Fault;
-use crate::plic::Fault::{Halt, MemoryFault};
+use crate::plic::Fault::MemoryFault;
 use crate::ram::Ram;
 use crate::rom::Rom;
 
@@ -95,25 +94,7 @@ impl Device for Rom {
     }
 }
 
-
-impl Device for Htif {
-    fn write_word(&self, _addr: usize, _val: u32) -> Result<(), Fault> {
-        Err(Halt)
-    }
-
-    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Halt)
-    }
-
-    fn read_word(&self, _addr: usize) -> Result<u32, Fault> {
-        Err(Halt)
-    }
-
-    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Halt)
-    }
-}
-
+#[cfg(test)]
 mod test {
     use crate::device::Device;
     use crate::dynbus::DynBus;
