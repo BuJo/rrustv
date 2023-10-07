@@ -244,6 +244,22 @@ impl<BT: Device> Hart<BT> {
                     format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
+            // XOR immediate
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x4,
+                rs1,
+                imm,
+            } => {
+                let val = self.get_register(rs1) ^ (imm as u32);
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("xor\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
             // AND immediate
             I {
                 opcode: 0b0010011,
@@ -784,6 +800,31 @@ mod tests {
                 assert_eq!(rs1, treg("t5"), "rs1 wrong");
                 assert_eq!(rs2, treg("ra"), "rs2 wrong");
                 assert_eq!(imm, -704, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+
+    #[test]
+    fn test_beq_8000093c() {
+        let ins = 0x00258593;
+        let m = hart();
+
+        let decoded = m.decode_instruction(ins).expect("decode").1;
+        println!("{:032b} {}", ins, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                rd,
+                funct3,
+                rs1,
+                imm,
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rs1, treg("a1"), "rs1 wrong");
+                assert_eq!(rd, treg("a1"), "rd wrong");
+                assert_eq!(imm, 2, "imm wrong");
             }
             _ => assert!(false, "not sw"),
         }
