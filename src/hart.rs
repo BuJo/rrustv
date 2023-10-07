@@ -118,7 +118,7 @@ impl<BT: Device> Hart<BT> {
             }
             0b0100011 => {
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
-                let rs1 = ((instruction >> 15) & 0b1111) as u8;
+                let rs1 = ((instruction >> 15) & 0b11111) as u8;
                 let rs2 = ((instruction >> 20) & 0b11111) as u8;
                 let imm7 = (instruction >> 7) & 0b11111;
                 let imm25 = instruction & 0xfe000000;
@@ -404,7 +404,6 @@ fn reg(reg: u8) -> &'static str {
     }
     "U"
 }
-
 
 #[derive(Debug)]
 pub enum InstructionFormat {
@@ -714,7 +713,6 @@ mod tests {
         assert_eq!(m.pc, 0x800032bc);
     }
 
-
     #[test]
     fn test_auipc_800032c0() {
         let ins = 0x00001f17;
@@ -736,22 +734,27 @@ mod tests {
         assert_eq!(m.get_register(treg("t5")), 0x800032c0 + (0x1 << 12));
     }
 
-
     #[test]
-    fn test_magic_800032c8() {
+    fn test_magic_800032c4() {
         let ins = 0xd41f2023;
         let m = hart();
 
         let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
-            InstructionFormat::S { opcode, funct3, rs1, rs2, imm } => {
+            InstructionFormat::S {
+                opcode,
+                funct3,
+                rs1,
+                rs2,
+                imm,
+            } => {
                 assert_eq!(opcode, 0b0100011, "opcode wrong");
                 assert_eq!(funct3, 0x2, "funct3 wrong");
-                assert_eq!(rs1, treg("a4"), "rs1 wrong");
+                assert_eq!(rs1, treg("t5"), "rs1 wrong");
                 assert_eq!(rs2, treg("ra"), "rs2 wrong");
                 assert_eq!(imm, -704, "imm wrong");
             }
-            _ => assert!(false, "not auipc"),
+            _ => assert!(false, "not sw"),
         }
     }
 }
