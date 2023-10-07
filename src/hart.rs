@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -89,7 +88,7 @@ impl Hart {
             0b0110011 => {
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
-                let rs1 = ((instruction >> 15) & 0b1111) as u8;
+                let rs1 = ((instruction >> 15) & 0b11111) as u8;
                 let rs2 = ((instruction >> 20) & 0b11111) as u8;
                 let funct7 = (instruction >> 25) as u8;
                 R {
@@ -121,12 +120,6 @@ impl Hart {
                 let imm7 = (instruction >> 7) & 0b11111;
                 let imm25 = instruction & 0xfe000000;
                 let imm = ((imm25 + (imm7 << 20)) as i32 as u64 >> 20) as i16;
-                println!(
-                    "1: {:032b}: {:032b}:{:032b} {:0x}",
-                    instruction, imm25, imm7, imm
-                );
-                println!("2: {:032b}: {:07b}:{:05b}", instruction, imm25 >> 25, imm7);
-                println!("3: {:032b}: {:012b}", instruction, (imm25 + (imm7 << 20)) >> 20, );
                 S {
                     opcode,
                     funct3,
@@ -139,9 +132,12 @@ impl Hart {
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
-                let imm7 = (instruction >> 7) & 0b11111;
-                let imm25 = instruction & 0xfff00000;
-                let imm = (((imm25 + (imm7 << 20)) as i32) as u64 >> 20) as i16;
+                let imm = ((instruction & 0x8000_0000) >> 19) |
+                    ((instruction & 0x7e00_0000) >> 20) |
+                    ((instruction & 0x0000_0f00) >> 7) |
+                    ((instruction & 0x0000_0080) << 4);
+                let imm = ((imm << 19) >> 19) as i16;
+
                 B {
                     opcode,
                     funct3,
@@ -152,7 +148,12 @@ impl Hart {
             }
             0b1101111 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
-                let imm = ((instruction & 0xfffff800) as i32 as u64 >> 12) as i32;
+                let imm = ((instruction & 0x8000_0000) >> 11) |
+                    ((instruction & 0x7fe0_0000) >> 20) |
+                    ((instruction & 0x0010_0000) >> 9) |
+                    (instruction & 0x000f_f000);
+                let imm = ((imm << 11) as i32) >> 11;
+
                 J { opcode, rd, imm }
             }
             0b0110111 | 0b0010111 => {
@@ -162,11 +163,11 @@ impl Hart {
             }
             _ => {
                 eprintln!(
-                    "[{}] [{:#x}] {:07b} Unknown opcode {}",
+                    "[{}] [{:#x}] {:07b} Unknown opcode for ins {:08x}",
                     self.csr[csr::MHARTID],
                     self.pc,
                     opcode,
-                    self.csr[csr::MINSTRET]
+                    instruction
                 );
                 panic!();
             }
@@ -286,7 +287,7 @@ impl Hart {
                 rd,
                 imm,
             } => {
-                self.set_register(rd, self.pc + 4);
+                self.set_register(rd, self.pc);
                 self.pc = self.pc.wrapping_add(imm as u32);
 
                 self.dbgins(ins, format!("jal\t{},{:#x}", reg(rd), imm))
@@ -358,43 +359,57 @@ impl Hart {
     }
 }
 
-fn reg(reg: u8) -> &'static str {
-    let regs = HashMap::from([
-        (0, "zero"),
-        (1, "ra"),
-        (2, "sp"),
-        (3, "gp"),
-        (4, "tp"),
-        (5, "t0"),
-        (6, "t1"),
-        (7, "t2"),
-        (8, "s0"),
-        (9, "s1"),
-        (10, "a0"),
-        (11, "a1"),
-        (12, "a2"),
-        (13, "a3"),
-        (14, "a4"),
-        (15, "a5"),
-        (16, "a6"),
-        (17, "a7"),
-        (18, "s2"),
-        (19, "s3"),
-        (20, "s4"),
-        (21, "s5"),
-        (22, "s6"),
-        (23, "s7"),
-        (24, "s8"),
-        (25, "s9"),
-        (26, "s10"),
-        (27, "s11"),
-        (28, "t3"),
-        (29, "t4"),
-        (30, "t5"),
-        (31, "t6"),
-    ]);
+const REGMAP: [(u8, &str); 32] = [
+    (0, "zero"),
+    (1, "ra"),
+    (2, "sp"),
+    (3, "gp"),
+    (4, "tp"),
+    (5, "t0"),
+    (6, "t1"),
+    (7, "t2"),
+    (8, "s0"),
+    (9, "s1"),
+    (10, "a0"),
+    (11, "a1"),
+    (12, "a2"),
+    (13, "a3"),
+    (14, "a4"),
+    (15, "a5"),
+    (16, "a6"),
+    (17, "a7"),
+    (18, "s2"),
+    (19, "s3"),
+    (20, "s4"),
+    (21, "s5"),
+    (22, "s6"),
+    (23, "s7"),
+    (24, "s8"),
+    (25, "s9"),
+    (26, "s10"),
+    (27, "s11"),
+    (28, "t3"),
+    (29, "t4"),
+    (30, "t5"),
+    (31, "t6"),
+];
 
-    regs.get(&reg).unwrap_or(&"U")
+fn reg(reg: u8) -> &'static str {
+    for (i, s) in REGMAP {
+        if i == reg {
+            return s;
+        }
+    }
+    "U"
+}
+
+fn treg(reg: &str) -> u8 {
+    for (i, s) in REGMAP {
+        if s == reg {
+            return i;
+        }
+    }
+    255
 }
 
 #[derive(Debug)]
@@ -511,7 +526,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::bus::Bus;
-    use crate::hart::{Hart, InstructionFormat};
+    use crate::hart::{Hart, InstructionFormat, treg};
     use crate::ram::Ram;
     use crate::rom::Rom;
     use crate::rtc::Rtc;
@@ -569,29 +584,130 @@ mod tests {
         assert_eq!(m.get_register(6), 0x40 + 4, "deadbeef");
     }
 
-    #[test]
-    fn testdecode() {
-        let ins = 0x0181a023;
+    fn hart() -> Hart {
         let rom = Rom::new(vec![]);
         let ram = Ram::new();
         let rtc = Rtc::new();
         let bus = Bus::new(rom, ram, rtc);
-        let m = Hart::new(0, 0, Arc::new(bus));
+        Hart::new(0, 0, Arc::new(bus))
+    }
+
+    #[test]
+    fn test_sw_80000130() {
+        let ins = 0x0181a023;
+        let m = hart();
 
         let decoded: InstructionFormat = m.decode_instruction(ins);
         match decoded {
-            InstructionFormat::R { .. } => assert!(false, "not S"),
-            InstructionFormat::I { .. } => assert!(false, "not S"),
-            InstructionFormat::S { opcode, funct3, rs1, rs2, imm } => {
+            InstructionFormat::S {
+                opcode,
+                funct3,
+                rs1,
+                rs2,
+                imm,
+            } => {
                 assert_eq!(opcode, 0b0100011, "opcode wrong");
                 assert_eq!(funct3, 0x2, "funct3 wrong");
                 assert_eq!(rs1, 3, "rs1 wrong");
                 assert_eq!(rs2, 24, "rs2 wrong");
                 assert_eq!(imm, 0, "imm wrong");
             }
-            InstructionFormat::B { .. } => assert!(false, "not S"),
-            InstructionFormat::U { .. } => assert!(false, "not S"),
-            InstructionFormat::J { .. } => assert!(false, "not S"),
+            _ => assert!(false, "not S"),
         }
+    }
+
+    #[test]
+    fn test_add_80000154() {
+        let ins = 0x015a8ab3;
+        let m = hart();
+
+        let decoded: InstructionFormat = m.decode_instruction(ins);
+        match decoded {
+            InstructionFormat::R {
+                opcode,
+                funct3,
+                funct7,
+                rd,
+                rs1,
+                rs2,
+            } => {
+                assert_eq!(opcode, 0b0110011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(funct7, 0x00, "funct7 wrong");
+                assert_eq!(rs1, 21, "rs1 wrong");
+                assert_eq!(rs2, 21, "rs2 wrong");
+                assert_eq!(rd, 21, "rd wrong");
+            }
+            _ => assert!(false, "not R"),
+        }
+    }
+
+    #[test]
+    fn test_addi_8000015c() {
+        let ins = 0xffe00b13;
+        let m = hart();
+
+        let decoded: InstructionFormat = m.decode_instruction(ins);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rd,
+                rs1,
+                imm,
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rd, 22, "rd wrong");
+                assert_eq!(rs1, 0, "rs1 wrong");
+                assert_eq!(imm, -2, "imm wrong");
+            }
+            _ => assert!(false, "not I"),
+        }
+    }
+
+    #[test]
+    fn test_lw_800032a0() {
+        let ins = 0x17812483;
+        let m = hart();
+
+        let decoded: InstructionFormat = m.decode_instruction(ins);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rd,
+                rs1,
+                imm,
+            } => {
+                assert_eq!(opcode, 0b0000011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rd, treg("s1"), "rd wrong");
+                assert_eq!(rs1, treg("sp"), "rs1 wrong");
+                assert_eq!(imm, 376, "imm wrong");
+            }
+            _ => assert!(false, "not I"),
+        }
+    }
+
+    #[test]
+    fn test_jal_8000329c() {
+        let ins = 0x0200006f;
+        let mut m = hart();
+        m.pc = 0x8000329c;
+
+        let decoded: InstructionFormat = m.decode_instruction(ins);
+        match decoded {
+            InstructionFormat::J { opcode, rd, imm } => {
+                assert_eq!(opcode, 0b1101111, "opcode wrong");
+                assert_eq!(rd, treg("zero"), "rd wrong");
+                assert_eq!(imm, 32, "imm wrong");
+            }
+            _ => assert!(false, "not J"),
+        }
+
+        m.execute_instruction(decoded, ins);
+
+        assert_eq!(m.pc, 0x800032bc);
     }
 }

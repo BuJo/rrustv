@@ -30,7 +30,7 @@ fn main() {
 
     let result = panic::catch_unwind(|| {
         let mut m = Hart::new(0, RAM_ADDR as u32, bus.clone());
-        for i in 0..100 {
+        for i in 0..10000 {
             if !m.tick() {
                 eprintln!("exited at: {}", i);
                 break;
