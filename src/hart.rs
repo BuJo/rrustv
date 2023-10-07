@@ -7,7 +7,7 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
 use crate::plic::Fault;
-use crate::plic::Fault::Halt;
+use crate::plic::Fault::{Halt, Unimplemented};
 use crate::see;
 
 pub struct Hart<BT: Device> {
@@ -64,7 +64,6 @@ impl<BT: Device> Hart<BT> {
     }
 
     pub fn set_register(&mut self, reg: u8, val: u32) {
-        //eprintln!("[{}] Setting register {} to 0x{:04x}", self.csr[csr::MHARTID], reg, val);
         match reg {
             0 => {}
             1..=31 => self.registers[reg as usize] = val,
@@ -172,7 +171,7 @@ impl<BT: Device> Hart<BT> {
                     opcode,
                     instruction
                 );
-                panic!();
+                return Err(Unimplemented);
             }
         };
 
