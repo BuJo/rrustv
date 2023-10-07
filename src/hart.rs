@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use InstructionFormat::{B, I, J, R, S, U};
 
-use crate::bus::Bus;
+use crate::bus::{Bus, Fault};
 use crate::csr;
 use crate::csr::Csr;
 use crate::see;
@@ -49,15 +49,17 @@ impl Hart {
             return false;
         }
 
-        let instruction = self.fetch_instruction();
-        let decoded = self.decode_instruction(instruction);
-        self.execute_instruction(decoded, instruction);
+        let res = self
+            .fetch_instruction()
+            .and_then(|instruction| self.decode_instruction(instruction))
+            .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins))
+            .is_ok();
 
         // simulate passing of time
         self.csr[csr::MCYCLE] += 3;
         self.csr[csr::MINSTRET] += 1;
 
-        true
+        res
     }
 
     pub fn set_register(&mut self, reg: u8, val: u32) {
@@ -76,15 +78,15 @@ impl Hart {
         }
     }
 
-    fn fetch_instruction(&mut self) -> u32 {
+    fn fetch_instruction(&mut self) -> Result<u32, Fault> {
         let ins = self.bus.read_word(self.pc as usize);
         self.pc += 4;
-        ins.unwrap_or(0x00100073)
+        ins
     }
 
-    fn decode_instruction(&self, instruction: u32) -> InstructionFormat {
+    fn decode_instruction(&self, instruction: u32) -> Result<(u32, InstructionFormat), Fault> {
         let opcode = (instruction & 0b1111111) as u8;
-        match opcode {
+        let decoded = match opcode {
             0b0110011 => {
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
@@ -132,10 +134,10 @@ impl Hart {
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b1111) as u8;
                 let rs2 = ((instruction >> 20) & 0b1111) as u8;
-                let imm = ((instruction & 0x8000_0000) >> 19) |
-                    ((instruction & 0x7e00_0000) >> 20) |
-                    ((instruction & 0x0000_0f00) >> 7) |
-                    ((instruction & 0x0000_0080) << 4);
+                let imm = ((instruction & 0x8000_0000) >> 19)
+                    | ((instruction & 0x7e00_0000) >> 20)
+                    | ((instruction & 0x0000_0f00) >> 7)
+                    | ((instruction & 0x0000_0080) << 4);
                 let imm = ((imm << 19) >> 19) as i16;
 
                 B {
@@ -148,10 +150,10 @@ impl Hart {
             }
             0b1101111 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
-                let imm = ((instruction & 0x8000_0000) >> 11) |
-                    ((instruction & 0x7fe0_0000) >> 20) |
-                    ((instruction & 0x0010_0000) >> 9) |
-                    (instruction & 0x000f_f000);
+                let imm = ((instruction & 0x8000_0000) >> 11)
+                    | ((instruction & 0x7fe0_0000) >> 20)
+                    | ((instruction & 0x0010_0000) >> 9)
+                    | (instruction & 0x000f_f000);
                 let imm = ((imm << 11) as i32) >> 11;
 
                 J { opcode, rd, imm }
@@ -171,17 +173,16 @@ impl Hart {
                 );
                 panic!();
             }
-        }
+        };
+
+        Ok((instruction, decoded))
     }
 
-    fn execute_instruction(&mut self, instruction: InstructionFormat, ins: u32) {
-        // eprintln!(
-        //     "[{}] [0x{:04x}] {}",
-        //     self.csr[csr::MHARTID],
-        //     self.pc,
-        //     instruction
-        // );
-
+    fn execute_instruction(
+        &mut self,
+        instruction: InstructionFormat,
+        ins: u32,
+    ) -> Result<(), Fault> {
         match instruction {
             // RV32I
 
@@ -253,7 +254,6 @@ impl Hart {
                 rs2,
                 imm,
             } => {
-                println!("{:}", instruction);
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
                 self.bus
@@ -348,9 +348,10 @@ impl Hart {
                     self.csr[csr::MHARTID],
                     instruction
                 );
-                todo!()
+                return Err(Fault::MemoryFault(self.pc as usize));
             }
-        }
+        };
+        Ok(())
     }
 
     fn dbgins(&self, ins: u32, asm: String) {
@@ -403,14 +404,6 @@ fn reg(reg: u8) -> &'static str {
     "U"
 }
 
-fn treg(reg: &str) -> u8 {
-    for (i, s) in REGMAP {
-        if s == reg {
-            return i;
-        }
-    }
-    255
-}
 
 #[derive(Debug)]
 pub enum InstructionFormat {
@@ -526,10 +519,19 @@ mod tests {
     use std::sync::Arc;
 
     use crate::bus::Bus;
-    use crate::hart::{Hart, InstructionFormat, treg};
+    use crate::hart::{Hart, InstructionFormat, REGMAP};
     use crate::ram::Ram;
     use crate::rom::Rom;
     use crate::rtc::Rtc;
+
+    fn treg(reg: &str) -> u8 {
+        for (i, s) in REGMAP {
+            if s == reg {
+                return i;
+            }
+        }
+        255
+    }
 
     #[test]
     fn addi() {
@@ -597,7 +599,7 @@ mod tests {
         let ins = 0x0181a023;
         let m = hart();
 
-        let decoded: InstructionFormat = m.decode_instruction(ins);
+        let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
             InstructionFormat::S {
                 opcode,
@@ -621,7 +623,7 @@ mod tests {
         let ins = 0x015a8ab3;
         let m = hart();
 
-        let decoded: InstructionFormat = m.decode_instruction(ins);
+        let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
             InstructionFormat::R {
                 opcode,
@@ -647,7 +649,7 @@ mod tests {
         let ins = 0xffe00b13;
         let m = hart();
 
-        let decoded: InstructionFormat = m.decode_instruction(ins);
+        let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
             InstructionFormat::I {
                 opcode,
@@ -671,7 +673,7 @@ mod tests {
         let ins = 0x17812483;
         let m = hart();
 
-        let decoded: InstructionFormat = m.decode_instruction(ins);
+        let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
             InstructionFormat::I {
                 opcode,
@@ -696,7 +698,7 @@ mod tests {
         let mut m = hart();
         m.pc = 0x8000329c;
 
-        let decoded: InstructionFormat = m.decode_instruction(ins);
+        let decoded = m.decode_instruction(ins).expect("decode").1;
         match decoded {
             InstructionFormat::J { opcode, rd, imm } => {
                 assert_eq!(opcode, 0b1101111, "opcode wrong");
@@ -706,7 +708,7 @@ mod tests {
             _ => assert!(false, "not J"),
         }
 
-        m.execute_instruction(decoded, ins);
+        m.execute_instruction(decoded, ins).expect("execute");
 
         assert_eq!(m.pc, 0x800032bc);
     }
