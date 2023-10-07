@@ -230,6 +230,22 @@ impl<BT: Device> Hart<BT> {
                     format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
+            // AND immediate
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x7,
+                rs1,
+                imm,
+            } => {
+                let val = self.get_register(rs1) & imm as u32;
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("and\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
             // lb Load Byte
             I {
                 opcode: 0b0000011,
