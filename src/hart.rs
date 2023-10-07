@@ -106,7 +106,7 @@ impl<BT: Device> Hart<BT> {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
-                let imm = ((instruction & 0xfff00000) as i32 as u64 >> 20) as i16;
+                let imm = ((instruction as i32) >> 20) as i16;
                 I {
                     opcode,
                     rd,
@@ -344,10 +344,24 @@ impl<BT: Device> Hart<BT> {
                 rd,
                 imm,
             } => {
-                self.set_register(rd, self.pc);
-                self.pc = self.pc.wrapping_add(imm as u32);
+                let target = (self.pc - 4).wrapping_add(imm as u32);
+                self.dbgins(ins, format!("jal\t{},{:x}", reg(rd), target));
 
-                self.dbgins(ins, format!("jal\t{},{:#x}", reg(rd), imm))
+                self.set_register(rd, self.pc);
+                self.pc = target;
+            }
+            // jalr Jump And Link Reg
+            I {
+                opcode: 0b1100111,
+                rd,
+                funct3: 0x0,
+                rs1,
+                imm,
+            } => {
+                self.dbgins(ins, format!("jr\t{},{:#x}", reg(rs1), imm));
+
+                self.set_register(rd, self.pc);
+                self.pc = self.get_register(rs1).wrapping_add(imm as u32);
             }
 
             // lui Load Upper Imm
