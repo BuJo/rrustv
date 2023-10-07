@@ -4,7 +4,7 @@ use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
 
-use object::{Object, ObjectSection};
+use object::{Object, ObjectSection, ObjectSymbol};
 
 use rriscv::device::Device;
 use rriscv::dynbus::DynBus;
@@ -21,7 +21,6 @@ fn main() {
 
     let mut bus = DynBus::new();
     let mut pc: usize = 0;
-    let mut tohost: Range<usize> = 0..0;
 
     let bin_data = fs::read(elf_file).expect("file");
     let elf = object::File::parse(&*bin_data).expect("parsing");
@@ -46,7 +45,6 @@ fn main() {
         let end = start + section.size() as usize;
         let htif = Htif::new();
         bus.map(htif, Range { start, end });
-        tohost = Range { start, end };
     }
 
 
@@ -64,15 +62,25 @@ fn main() {
     }
 
     if let Some(sig_file) = sig_file {
-        write_signature(sig_file, bus.clone(), tohost);
+        write_signature(sig_file, bus.clone(), elf);
     }
 }
 
-fn write_signature(sig_file: &String, bus: Arc<DynBus>, range: Range<usize>) {
+fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File<>) {
     let mut f = File::create(sig_file).expect("sigfile open");
 
+    let mut begin_signature = 0;
+    let mut end_signature = 0;
+    for symbol in elf.symbols() {
+        match symbol.name() {
+            Ok("begin_signature") => begin_signature = symbol.address() as usize,
+            Ok("end_signature") => end_signature = symbol.address() as usize,
+            _ => {}
+        }
+    }
+
     let mut i = 1u32;
-    for addr in range {
+    for addr in begin_signature..end_signature {
         let byte = bus.read_byte(addr).expect("ram");
         f.write(format!("{:02x}", byte).as_bytes())
             .expect("writing sig");
