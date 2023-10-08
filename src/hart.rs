@@ -132,13 +132,13 @@ impl<BT: Device> Hart<BT> {
             }
             0b1100011 => {
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
-                let rs1 = ((instruction >> 15) & 0b1111) as u8;
-                let rs2 = ((instruction >> 20) & 0b1111) as u8;
+                let rs1 = ((instruction >> 15) & 0b11111) as u8;
+                let rs2 = ((instruction >> 20) & 0b11111) as u8;
                 let imm = ((instruction & 0x8000_0000) >> 19)
                     | ((instruction & 0x7e00_0000) >> 20)
                     | ((instruction & 0x0000_0f00) >> 7)
                     | ((instruction & 0x0000_0080) << 4);
-                let imm = ((imm << 19) >> 19) as i16;
+                let imm = (((imm << 19) as i32) >> 19) as i16;
 
                 B {
                     opcode,
@@ -327,16 +327,12 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("beq\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
                 if self.get_register(rs1) == self.get_register(rs2) {
-                    if imm > 0 {
-                        // increment program counter, without the current address
-                        self.pc = self.pc.wrapping_add(imm as u32) - 4
-                    } else {
-                        // decrement program counter, without current address and disregarding rmb
-                        self.pc = self.pc.wrapping_add(imm as u32) - 1 - 4
-                    }
+                    self.pc = target;
                 }
-                self.dbgins(ins, format!("beq\t{},{},{}", reg(rs1), reg(rs2), imm))
             }
             // jal Jump And Link
             J {
@@ -842,5 +838,65 @@ mod tests {
             }
             _ => assert!(false, "not sw"),
         }
+    }
+
+    #[test]
+    fn test_beq_80000134() {
+        // j	80000938
+        let ins = 0x0050006f;
+        let mut m = hart();
+        m.pc = 0x80000134;
+
+        let decoded = m.decode_instruction(ins).expect("decode").1;
+        println!("{:032b} {}", ins, decoded);
+        match decoded {
+            InstructionFormat::J {
+                opcode,
+                rd,
+                imm,
+            } => {
+                assert_eq!(opcode, 0b1101111, "opcode wrong");
+                assert_eq!(rd, treg("zero"), "rd wrong");
+                assert_eq!(imm, 2052, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.get_register(treg("zero")), 0);
+        assert_eq!(m.pc, 0x80000938, "should have jumped");
+    }
+
+    #[test]
+    fn test_beq_80000938() {
+        // beq	s3,s3,80000138
+        let ins = 0x813980e3;
+        let mut m = hart();
+        m.pc = 0x80000134;
+
+        let decoded = m.decode_instruction(ins).expect("decode").1;
+        println!("{:032b} {}", ins, decoded);
+        match decoded {
+            InstructionFormat::B {
+                opcode,
+                funct3,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                assert_eq!(opcode, 0b1100011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rs1, treg("s3"), "rs1 wrong");
+                assert_eq!(rs2, treg("s3"), "rs1 wrong");
+                assert_eq!(imm, -2048, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+
+        m.set_register(treg("s3"), 0x55555555);
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.pc, 0x80000138, "should have jumped");
     }
 }
