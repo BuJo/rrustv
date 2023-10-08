@@ -281,6 +281,7 @@ impl<BT: Device> Hart<BT> {
                     format!("and\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
+
             // lb Load Byte
             I {
                 opcode: 0b0000011,
@@ -290,11 +291,68 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
-                let val = self.bus.read_byte(addr).expect("address being readable");
+                let val = self.bus.read_byte(addr)? as i8;
                 self.set_register(rd, val as u32);
 
                 self.dbgins(ins, format!("lb\t{},{},{:#x}", reg(rd), reg(rs1), imm))
             }
+            // lh Load Half
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.bus.read_half(addr)? as i16;
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("lh\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+            // lw Load Word
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x2,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.bus.read_word(addr)?;
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("lw\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+            // lbu Load Byte (U, zero extends)
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x4,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.bus.read_byte(addr)?;
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("lbu\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+            // lhu Load Half (U, zero extends)
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = self.bus.read_half(addr)?;
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("lhu\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+
             // sb Store Byte
             S {
                 opcode: 0b0100011,
