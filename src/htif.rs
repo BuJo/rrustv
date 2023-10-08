@@ -1,6 +1,6 @@
 use crate::device::Device;
 use crate::plic::Fault;
-use crate::plic::Fault::{Halt, MemoryFault};
+use crate::plic::Fault::{Halt, MemoryFault, Unaligned};
 
 pub struct Htif {}
 
@@ -24,15 +24,23 @@ impl Device for Htif {
         }
     }
 
+    fn write_half(&self, addr: usize, _val: u16) -> Result<(), Fault> {
+        Err(Unaligned(addr))
+    }
+
     fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(MemoryFault(addr))
+        Err(Unaligned(addr))
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         Err(MemoryFault(addr))
     }
 
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        Err(Unaligned(addr))
+    }
+
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
-        Err(MemoryFault(addr))
+        Err(Unaligned(addr))
     }
 }

@@ -67,7 +67,7 @@ fn main() {
             eprintln!("endless, killing");
             break;
         }
-        i+=1;
+        i += 1;
     }
 
     if let Some(sig_file) = sig_file {

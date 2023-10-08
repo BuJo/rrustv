@@ -51,8 +51,12 @@ impl Device for Rtc {
         }
     }
 
-    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+    fn write_half(&self, addr: usize, _val: u16) -> Result<(), Fault> {
+        Err(Fault::Unaligned(addr))
+    }
+
+    fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
+        Err(Fault::Unaligned(addr))
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
@@ -67,7 +71,11 @@ impl Device for Rtc {
         }
     }
 
-    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Fault::Unimplemented)
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        Err(Fault::Unaligned(addr))
+    }
+
+    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+        Err(Fault::Unaligned(addr))
     }
 }

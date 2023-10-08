@@ -38,13 +38,22 @@ impl Default for Ram {
 }
 
 impl Device for Ram {
-    fn write_word(&self, addr: usize, word: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (word & 0xFF) as u8;
-        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((word >> 8) & 0xFF) as u8;
-        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((word >> 16) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((word >> 24) & 0xFF) as u8;
+        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
+        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
+        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((val >> 16) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 24) & 0xFF) as u8;
+
+        Ok(())
+    }
+
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+        let mut shared = self.data.write().unwrap();
+
+        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
+        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
 
         Ok(())
     }
@@ -59,11 +68,19 @@ impl Device for Ram {
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let data = self.data.read().unwrap();
 
-        let ins: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
+        let val: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
             + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u32) << 8)
             + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u32) << 16)
             + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u32) << 24);
-        Ok(ins)
+        Ok(val)
+    }
+
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        let data = self.data.read().unwrap();
+
+        let hw = (*data.get(addr).ok_or(MemoryFault(addr))? as u16)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u16) << 8);
+        Ok(hw)
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {

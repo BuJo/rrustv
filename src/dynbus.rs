@@ -49,6 +49,17 @@ impl Device for DynBus {
         Err(MemoryFault(addr))
     }
 
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_half(addr - range.start, val);
+            }
+        }
+        Err(MemoryFault(addr))
+    }
+
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
         let devices = self.devices.read().unwrap();
 
@@ -66,6 +77,17 @@ impl Device for DynBus {
         for (range, device) in devices.iter() {
             if range.contains(&addr) {
                 return device.read_word(addr - range.start);
+            }
+        }
+        Err(MemoryFault(addr))
+    }
+
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_half(addr - range.start);
             }
         }
         Err(MemoryFault(addr))

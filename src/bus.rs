@@ -25,6 +25,13 @@ impl Device for Bus {
         }
     }
 
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+        match addr {
+            0x80000000.. => self.ram.write_half(addr - RAM_ADDR, val),
+            _ => Err(MemoryFault(addr)),
+        }
+    }
+
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
         match addr {
             0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val),
@@ -36,6 +43,14 @@ impl Device for Bus {
         match addr {
             0x0000..=0x1FFF => self.rom.read_word(addr),
             0x80000000.. => self.ram.read_word(addr - RAM_ADDR),
+            _ => Err(MemoryFault(addr)),
+        }
+    }
+
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        match addr {
+            0x0000..=0x1FFF => self.rom.read_half(addr),
+            0x80000000.. => self.ram.read_half(addr - RAM_ADDR),
             _ => Err(MemoryFault(addr)),
         }
     }

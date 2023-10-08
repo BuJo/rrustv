@@ -21,6 +21,10 @@ impl Device for Rom {
         Err(MemoryFault(addr))
     }
 
+    fn write_half(&self, addr: usize, _val: u16) -> Result<(), Fault> {
+        Err(MemoryFault(addr))
+    }
+
     fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
         Err(MemoryFault(addr))
     }
@@ -28,11 +32,19 @@ impl Device for Rom {
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let data = self.data.read().unwrap();
 
-        let ins: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
+        let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
             + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u32) << 8)
             + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u32) << 16)
             + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u32) << 24);
-        Ok(ins)
+        Ok(val)
+    }
+
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        let data = self.data.read().unwrap();
+
+        let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u16)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u16) << 8);
+        Ok(val)
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {

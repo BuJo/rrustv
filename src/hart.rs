@@ -54,6 +54,10 @@ impl<BT: Device> Hart<BT> {
         let res = self
             .fetch_instruction()
             .and_then(|instruction| self.decode_instruction(instruction))
+            // .and_then(|i| {
+            //         eprintln!("[{:x}] {:x} {}", self.pc-4, i.0, i.1);
+            //         Ok(i)
+            //     })
             .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
 
         // simulate passing of time
@@ -300,12 +304,24 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
-                let val = self.get_register(rs2 & 0xF) as u8;
-                self.bus
-                    .write_byte(addr, val)
-                    .expect("address being writeable");
+                let val = (self.get_register(rs2) & 0xFF) as u8;
 
-                self.dbgins(ins, format!("sb {},{},{:#x}", reg(rs1), reg(rs2), imm))
+                self.dbgins(ins, format!("sb\t{},{}({})", reg(rs2), imm, reg(rs1)));
+                return self.bus.write_byte(addr, val);
+            }
+            // sh Store Half
+            S {
+                opcode: 0b0100011,
+                funct3: 0x1,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+                let val = (self.get_register(rs2) & 0xFFFF) as u16;
+
+                self.dbgins(ins, format!("sh\t{},{}({})", reg(rs2), imm, reg(rs1)));
+                return self.bus.write_half(addr, val);
             }
             // sw Store Word
             S {
@@ -317,13 +333,14 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
                 let val = self.get_register(rs2);
+
                 self.dbgins(ins, format!("sw\t{},{}({})", reg(rs2), imm, reg(rs1)));
                 return self.bus.write_word(addr, val);
             }
             // beq Branch ==
             B {
                 opcode: 0b1100011,
-                funct3: 0x00,
+                funct3: 0x0,
                 rs1,
                 rs2,
                 imm,
