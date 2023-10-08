@@ -497,7 +497,7 @@ impl<BT: Device> Hart<BT> {
                 let val = self.bus.read_byte(addr)? as i8;
                 self.set_register(rd, val as u32);
 
-                self.dbgins(ins, format!("lb\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+                self.dbgins(ins, format!("lb\t{},{}({})", reg(rd), imm, reg(rs1)))
             }
             // lh Load Half
             I {
@@ -511,7 +511,7 @@ impl<BT: Device> Hart<BT> {
                 let val = self.bus.read_half(addr)? as i16;
                 self.set_register(rd, val as u32);
 
-                self.dbgins(ins, format!("lh\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+                self.dbgins(ins, format!("lh\t{},{}({})", reg(rd), imm, reg(rs1)))
             }
             // lw Load Word
             I {
@@ -525,7 +525,7 @@ impl<BT: Device> Hart<BT> {
                 let val = self.bus.read_word(addr)?;
                 self.set_register(rd, val);
 
-                self.dbgins(ins, format!("lw\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+                self.dbgins(ins, format!("lw\t{},{}({})", reg(rd), imm, reg(rs1)))
             }
             // lbu Load Byte (U, zero extends)
             I {
@@ -744,6 +744,7 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
             }
 
+            // RV32 Zifencei
             // Fence
             I {
                 opcode: 0b0001111,
@@ -752,7 +753,6 @@ impl<BT: Device> Hart<BT> {
                 rs1: 0x0,
                 imm,
             } => {
-
                 let pred = (imm >> 4) & 0b1111;
                 let succ = imm & 0b1111;
                 self.dbgins(ins, format!("fence\t{},{}", pred, succ))
@@ -777,9 +777,11 @@ impl<BT: Device> Hart<BT> {
                 ..
             } => {
                 // We're unprivileged machine mode, no need to check SEDELEG
-                see::call(self);
 
-                self.dbgins(ins, "ecall".to_string())
+                self.dbgins(ins, "ecall".to_string());
+
+                // For now, ignore SEE errors
+                let _ = see::call(self);
             }
             // ebreak Environment Break
             I {
@@ -792,6 +794,66 @@ impl<BT: Device> Hart<BT> {
                 self.stop = true;
 
                 self.dbgins(ins, "ebreak".to_string())
+            }
+
+            // RV32/RV64 Zicsr
+            // csrrw Atomic Read/Write CSR
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                imm
+            } => {
+                if rd != 0 {
+                    eprintln!("CSR {} to {} = {:x}", Csr::name(imm as u32), reg(rd),self.get_register(rs1));
+                    self.set_register(rd, self.csr[imm as usize]);
+                } else {
+                    eprintln!("CSR {} = {:x}", Csr::name(imm as u32), self.get_register(rs1));
+                }
+                self.csr[imm as usize] = self.get_register(rs1);
+
+                self.dbgins(ins, format!("csrrw\t{},{},{}", reg(rd), Csr::name(imm as u32), reg(rs1)))
+            }
+            // csrrs Atomic Read and Set Bits in CSR
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x2,
+                rs1,
+                imm
+            } => {
+                self.set_register(rd, self.csr[imm as usize]);
+
+
+                if rs1 != 0 {
+                    eprintln!("CSR {} to {} = {:x}->{:x}", Csr::name(imm as u32), reg(rd), self.csr[imm as usize],
+                              (self.csr[imm as usize] | self.get_register(rs1)));
+                    self.csr[imm as usize] = self.csr[imm as usize] | self.get_register(rs1);
+                }
+                {
+                    eprintln!("CSR {} to {} = {:x}", Csr::name(imm as u32), reg(rd), self.csr[imm as usize]);
+                }
+
+                self.dbgins(ins, format!("csrrs\t{},{},{}", reg(rd), Csr::name(imm as u32), reg(rs1)))
+            }
+            // csrrc Atomic Read and Clear Bits in CSR
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x3,
+                rs1,
+                imm
+            } => {
+                if rd != 0 {
+                    self.set_register(rd, self.csr[imm as usize]);
+                }
+
+                if rs1 != 0 {
+                    self.csr[imm as usize] = self.csr[imm as usize] & !self.get_register(rs1);
+                }
+
+                self.dbgins(ins, format!("csrrc\t{},{},{}", reg(rd), Csr::name(imm as u32), reg(rs1)))
             }
 
             _ => {

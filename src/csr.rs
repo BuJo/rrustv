@@ -9,6 +9,8 @@ pub const NUM_CSRS: usize = 4096;
 pub const MSTATUS: usize = 0x300;
 pub const MISA: usize = 0x301;
 pub const MEDELEG: usize = 0x301;
+pub const MTVEC: usize = 0x305;
+pub const MSCRATCH: usize = 0x340;
 pub const MVENDORID: usize = 0xF11;
 pub const MARCHID: usize = 0xF12;
 pub const MIMPID: usize = 0xF13;
@@ -64,5 +66,23 @@ impl Index<usize> for Csr {
 impl IndexMut<usize> for Csr {
     fn index_mut(&mut self, csr: usize) -> &mut Self::Output {
         &mut self.csrs[csr]
+    }
+}
+
+
+const NAME_MAP: [(usize, &'static str); 2] = [
+    (MSCRATCH, "mscratch"),
+    (MTVEC, "mtvec"),
+];
+
+
+impl Csr {
+    pub fn name(id: u32) -> &'static str {
+        for (i, s) in NAME_MAP {
+            if i == (id as usize) {
+                return s;
+            }
+        }
+        "U"
     }
 }

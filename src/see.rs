@@ -5,6 +5,8 @@ use crate::device::Device;
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
 use crate::hart;
+use crate::plic::Fault;
+use crate::plic::Fault::Unimplemented;
 
 const SBI_VERSION: (u32, u32) = (1, 0);
 const SBI_IMPL_ID: u32 = 0xFFFFFFFF;
@@ -38,6 +40,7 @@ impl IndexMut<Register> for [u32; 32] {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 enum Error {
     Success = 0,
     Failed = -1,
@@ -159,7 +162,7 @@ fn sbi_system_reset<BT: Device>(
 }
 
 // Legacy Extensions have a different calling convention
-fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) {
+fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
     let func = hart.get_register(Register::EID as u8);
 
     let result = match func {
@@ -172,15 +175,17 @@ fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) {
     match result {
         Ok(value) => {
             hart.set_register(Register::ARG0 as u8, value);
+            Ok(value)
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u32);
+            Err(error)
         }
     }
 }
 
-fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) {
+fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
     let func = (
         hart.get_register(Register::EID as u8),
         hart.get_register(Register::FID as u8),
@@ -206,18 +211,20 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) {
         Ok(value) => {
             hart.set_register(Register::ARG0 as u8, Error::Success as u32);
             hart.set_register(Register::ARG1 as u8, value);
+            Ok(value)
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u32);
+            Err(error)
         }
     }
 }
 
-pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) {
+pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Fault> {
     if (0x00..=0x0F).contains(&hart.get_register(Register::EID as u8)) {
-        call_0_1(hart)
+        call_0_1(hart).map(|_x| ()).or_else(|_x| Err(Unimplemented))
     } else {
-        call_0_2(hart)
+        call_0_2(hart).map(|_x| ()).or_else(|_x| Err(Unimplemented))
     }
 }
