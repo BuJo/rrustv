@@ -293,6 +293,22 @@ impl<BT: Device> Hart<BT> {
                     format!("xor\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
+            // OR immediate
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x6,
+                rs1,
+                imm,
+            } => {
+                let val = self.get_register(rs1) | imm as u32;
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("or\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
             // AND immediate
             I {
                 opcode: 0b0010011,
