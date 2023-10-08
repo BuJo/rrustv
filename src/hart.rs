@@ -352,6 +352,82 @@ impl<BT: Device> Hart<BT> {
                     self.pc = target;
                 }
             }
+            // bne Branch !=
+            B {
+                opcode: 0b1100011,
+                funct3: 0x1,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("bne\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
+                if self.get_register(rs1) != self.get_register(rs2) {
+                    self.pc = target;
+                }
+            }
+            // blt Branch <
+            B {
+                opcode: 0b1100011,
+                funct3: 0x4,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("blt\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
+                if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
+                    self.pc = target;
+                }
+            }
+            // bge Branch >=
+            B {
+                opcode: 0b1100011,
+                funct3: 0x5,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("bge\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
+                if (self.get_register(rs1) as i32) >= (self.get_register(rs2) as i32) {
+                    self.pc = target;
+                }
+            }
+            // bgltu Branch < (U, zero extends)
+            B {
+                opcode: 0b1100011,
+                funct3: 0x6,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("bgltu\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
+                if self.get_register(rs1) < self.get_register(rs2) {
+                    self.pc = target;
+                }
+            }
+            // bgeu Branch >= (U, zero extends)
+            B {
+                opcode: 0b1100011,
+                funct3: 0x7,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                self.dbgins(ins, format!("bgeu\t{},{},{:x}", reg(rs1), reg(rs2), target));
+
+                if self.get_register(rs1) >= self.get_register(rs2) {
+                    self.pc = target;
+                }
+            }
+
             // jal Jump And Link
             J {
                 opcode: 0b1101111,
