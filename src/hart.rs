@@ -228,7 +228,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0x00,
             } => {
-                let val = self.get_register(rs1) ^self.get_register(rs2);
+                let val = self.get_register(rs1) ^ self.get_register(rs2);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("xor\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -302,6 +302,38 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, val as u32);
 
                 self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // slt Set Less Than
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x2,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let val = if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
+                    1
+                } else { 0 };
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("slt\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // sltu Set Less Than (U, zero extends)
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x3,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let val = if self.get_register(rs1) < self.get_register(rs2) {
+                    1
+                } else { 0 };
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("sltu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
 
             // ADD immediate
@@ -403,6 +435,42 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(
                     ins,
                     format!("sr?i\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
+            // slti Set Less Than Imm
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x2,
+                rs1,
+                imm,
+            } => {
+                let val = if (self.get_register(rs1) as i32) < (imm as i32) {
+                    1
+                } else { 0 };
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("sr?i\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
+            // sltiu Set Less Than Imm (U, zero extends)
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x3,
+                rs1,
+                imm,
+            } => {
+                let val = if self.get_register(rs1) < (imm as u32) {
+                    1
+                } else { 0 };
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("sltiu\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
 
