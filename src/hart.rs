@@ -407,7 +407,7 @@ impl<BT: Device> Hart<BT> {
                 funct3: 0x1,
                 rs1,
                 imm,
-            } => {
+            } if ((imm as u16) >> 5) == 0x00 => {
                 let (val, _) = self.get_register(rs1).overflowing_shl((imm & 0b11111) as u32);
                 self.set_register(rd, val);
 
@@ -416,25 +416,36 @@ impl<BT: Device> Hart<BT> {
                     format!("slli\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
-            // srli/srai Shift Right (Logical, Arith) Imm
+            // srli Shift Right Logical Imm
             I {
                 opcode: 0b0010011,
                 rd,
                 funct3: 0x5,
                 rs1,
                 imm,
-            } => {
-                let func7 = (imm as u16) >> 5;
-                let val = if func7 == 0x00 {
-                    self.get_register(rs1).overflowing_shr((imm & 0b11111) as u32).0
-                } else {
-                    (self.get_register(rs1) as i32).overflowing_shr((imm & 0b11111) as u32).0 as u32
-                };
+            } if ((imm as u16) >> 5) == 0x00 => {
+                let val = self.get_register(rs1).overflowing_shr((imm & 0b11111) as u32).0;
                 self.set_register(rd, val);
 
                 self.dbgins(
                     ins,
-                    format!("sr?i\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    format!("srli\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
+            // srai Shift Right Arith Imm
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } if ((imm as u16) >> 5) == 0x20 => {
+                let val = (self.get_register(rs1) as i32).overflowing_shr((imm & 0b11111) as u32).0 as u32;
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("srai\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
             // slti Set Less Than Imm
