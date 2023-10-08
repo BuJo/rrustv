@@ -1,8 +1,8 @@
-use std::{env, fs};
 use std::fs::File;
 use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
+use std::{env, fs};
 
 use object::{Object, ObjectSection, ObjectSymbol};
 

@@ -69,12 +69,7 @@ impl IndexMut<usize> for Csr {
     }
 }
 
-
-const NAME_MAP: [(usize, &str); 2] = [
-    (MSCRATCH, "mscratch"),
-    (MTVEC, "mtvec"),
-];
-
+const NAME_MAP: [(usize, &str); 2] = [(MSCRATCH, "mscratch"), (MTVEC, "mtvec")];
 
 impl Csr {
     pub fn name(id: u32) -> &'static str {

@@ -20,7 +20,9 @@ unsafe impl Sync for DynBus {}
 
 impl DynBus {
     pub fn new() -> DynBus {
-        Self { devices: RwLock::new(vec![]) }
+        Self {
+            devices: RwLock::new(vec![]),
+        }
     }
 
     pub fn map(&mut self, device: impl Device + 'static, range: Range<usize>) {
@@ -35,7 +37,6 @@ impl Default for DynBus {
         Self::new()
     }
 }
-
 
 impl Device for DynBus {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
@@ -128,7 +129,6 @@ mod test {
         let err = bus.write_word(0x0, 0x0);
         assert_eq!(err.is_ok(), true, "ram should write");
     }
-
 
     #[test]
     fn htif() {

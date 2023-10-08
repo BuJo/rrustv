@@ -1,6 +1,6 @@
-use std::{env, fs};
 use std::sync::Arc;
 use std::thread;
+use std::{env, fs};
 
 use rriscv::bus::Bus;
 use rriscv::hart::Hart;
