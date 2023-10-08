@@ -106,7 +106,7 @@ impl<BT: Device> Hart<BT> {
                     funct7,
                 }
             }
-            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 => {
+            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 | 0b0001111 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
@@ -744,6 +744,31 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
             }
 
+            // Fence
+            I {
+                opcode: 0b0001111,
+                funct3: 0x0,
+                rd: 0x0,
+                rs1: 0x0,
+                imm,
+            } => {
+
+                let pred = (imm >> 4) & 0b1111;
+                let succ = imm & 0b1111;
+                self.dbgins(ins, format!("fence\t{},{}", pred, succ))
+            }
+            // Fence.I
+            I {
+                opcode: 0b0001111,
+                funct3: 0x1,
+                rd: 0x0,
+                rs1: 0x0,
+                imm: 0,
+            } => {
+                // For now, all accesses to addresses go through locking, ignore fence
+                self.dbgins(ins, "fence unknown,unknown".to_string())
+            }
+
             // ecall Environment Call
             I {
                 opcode: 0b1110011,
@@ -768,6 +793,7 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, "ebreak".to_string())
             }
+
             _ => {
                 eprintln!(
                     "[{}] Unknown instruction: {:}",
