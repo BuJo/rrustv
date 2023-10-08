@@ -261,6 +261,49 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("and\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
+            // sll Shift Left Logical
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let (val, _) = self.get_register(rs1).overflowing_shl(self.get_register(rs2));
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("sll\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // srl Shift Left Logical
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let (val, _) = self.get_register(rs1).overflowing_shr(self.get_register(rs2));
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("srl\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // sra Shift Right Arith
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                rs2,
+                funct7: 0x20,
+            } => {
+                let (val, _) = (self.get_register(rs1) as i32).overflowing_shr(self.get_register(rs2));
+                self.set_register(rd, val as u32);
+
+                self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+
             // ADD immediate
             I {
                 opcode: 0b0010011,
@@ -323,6 +366,43 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(
                     ins,
                     format!("and\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
+            // slli Shift Left Logical Imm
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                imm,
+            } => {
+                let (val, _) = self.get_register(rs1).overflowing_shl((imm & 0b11111) as u32);
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("slli\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
+            // srli/srai Shift Right (Logical, Arith) Imm
+            I {
+                opcode: 0b0010011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } => {
+                let func7 = (imm as u16) >> 5;
+                let val = if func7 == 0x00 {
+                    self.get_register(rs1).overflowing_shr((imm & 0b11111) as u32).0
+                } else {
+                    (self.get_register(rs1) as i32).overflowing_shr((imm & 0b11111) as u32).0 as u32
+                };
+                self.set_register(rd, val);
+
+                self.dbgins(
+                    ins,
+                    format!("sr?i\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
 
