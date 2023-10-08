@@ -223,8 +223,8 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
 
 pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Fault> {
     if (0x00..=0x0F).contains(&hart.get_register(Register::EID as u8)) {
-        call_0_1(hart).map(|_x| ()).or_else(|_x| Err(Unimplemented))
+        call_0_1(hart).map(|_x| ()).map_err(|_x| Unimplemented)
     } else {
-        call_0_2(hart).map(|_x| ()).or_else(|_x| Err(Unimplemented))
+        call_0_2(hart).map(|_x| ()).map_err(|_x| Unimplemented)
     }
 }

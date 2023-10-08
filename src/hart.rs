@@ -829,7 +829,7 @@ impl<BT: Device> Hart<BT> {
                 if rs1 != 0 {
                     eprintln!("CSR {} to {} = {:x}->{:x}", Csr::name(imm as u32), reg(rd), self.csr[imm as usize],
                               (self.csr[imm as usize] | self.get_register(rs1)));
-                    self.csr[imm as usize] = self.csr[imm as usize] | self.get_register(rs1);
+                    self.csr[imm as usize] |= self.get_register(rs1);
                 }
                 {
                     eprintln!("CSR {} to {} = {:x}", Csr::name(imm as u32), reg(rd), self.csr[imm as usize]);
@@ -850,7 +850,7 @@ impl<BT: Device> Hart<BT> {
                 }
 
                 if rs1 != 0 {
-                    self.csr[imm as usize] = self.csr[imm as usize] & !self.get_register(rs1);
+                    self.csr[imm as usize] &= !self.get_register(rs1);
                 }
 
                 self.dbgins(ins, format!("csrrc\t{},{},{}", reg(rd), Csr::name(imm as u32), reg(rs1)))

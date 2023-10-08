@@ -70,7 +70,7 @@ impl IndexMut<usize> for Csr {
 }
 
 
-const NAME_MAP: [(usize, &'static str); 2] = [
+const NAME_MAP: [(usize, &str); 2] = [
     (MSCRATCH, "mscratch"),
     (MTVEC, "mtvec"),
 ];
