@@ -219,6 +219,34 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("sub\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
+            // XOR
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x4,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let val = self.get_register(rs1) ^self.get_register(rs2);
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("xor\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // OR
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0x6,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let val = self.get_register(rs1) | self.get_register(rs2);
+                self.set_register(rd, val);
+
+                self.dbgins(ins, format!("or\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
             // AND
             R {
                 opcode: 0b0110011,
