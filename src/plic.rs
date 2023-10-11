@@ -4,4 +4,5 @@ pub enum Fault {
     Unaligned(usize),
     Halt,
     Unimplemented,
+    IllegalOpcode(u32),
 }

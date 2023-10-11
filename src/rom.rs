@@ -14,6 +14,12 @@ impl Rom {
             data: RwLock::new(data),
         }
     }
+
+    pub fn len(&self) -> usize {
+        let data = self.data.read().unwrap();
+
+        data.len()
+    }
 }
 
 impl Device for Rom {

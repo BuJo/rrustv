@@ -7,7 +7,7 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
 use crate::plic::Fault;
-use crate::plic::Fault::{Halt, Unimplemented};
+use crate::plic::Fault::{Halt, IllegalOpcode, Unimplemented};
 use crate::see;
 
 pub struct Hart<BT: Device> {
@@ -19,6 +19,11 @@ pub struct Hart<BT: Device> {
     csr: Csr,
 
     stop: bool,
+}
+
+pub enum Instruction {
+    IRV32(u32),
+    CRV32(u16),
 }
 
 impl<BT: Device> Hart<BT> {
@@ -53,11 +58,7 @@ impl<BT: Device> Hart<BT> {
 
         let res = self
             .fetch_instruction()
-            .and_then(|instruction| self.decode_instruction(instruction))
-            // .and_then(|i| {
-            //         eprintln!("[{:x}] {:x} {}", self.pc-4, i.0, i.1);
-            //         Ok(i)
-            //     })
+            .and_then(|instruction| instruction.decode())
             .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
 
         // simulate passing of time
@@ -82,13 +83,44 @@ impl<BT: Device> Hart<BT> {
         }
     }
 
-    fn fetch_instruction(&mut self) -> Result<u32, Fault> {
-        let ins = self.bus.read_word(self.pc as usize);
-        self.pc += 4;
-        ins
+    fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
+        let ins = self.bus.read_word(self.pc as usize)?;
+        eprintln!(
+            "[{}] [{:#x}] {:02b} {:07b} Opcode for ins {:08x} {:032b}",
+            self.csr[csr::MHARTID],
+            self.pc,
+            ins & 0b11,
+            ins & 0b1111111,
+            ins,
+            ins
+        );
+        // Assuming little-endian, the first byte contains the opcode
+        let ins = self.bus.read_word(self.pc as usize)?;
+        match ins & 0b11 {
+            // 32-bit instruction
+            0b11 => {
+                self.pc += 4;
+                Ok(Instruction::IRV32(ins))
+            }
+            // 16-bit compressed instruction
+            _ => {
+                let ins = self.bus.read_half(self.pc as usize)?;
+                self.pc += 2;
+                Ok(Instruction::CRV32(ins))
+            }
+        }
+    }
+}
+
+impl Instruction {
+    fn decode(self) -> Result<(u32, InstructionFormat), Fault> {
+        match self {
+            Instruction::IRV32(instruction) => Instruction::decode_32(instruction),
+            Instruction::CRV32(instruction) => Instruction::decode_16(instruction),
+        }
     }
 
-    fn decode_instruction(&self, instruction: u32) -> Result<(u32, InstructionFormat), Fault> {
+    fn decode_32(instruction: u32) -> Result<(u32, InstructionFormat), Fault> {
         let opcode = (instruction & 0b1111111) as u8;
         let decoded = match opcode {
             0b0110011 => {
@@ -168,21 +200,47 @@ impl<BT: Device> Hart<BT> {
                 U { opcode, rd, imm }
             }
             _ => {
-                eprintln!(
-                    "[{}] [{:#x}] {:07b} Unknown opcode for ins {:08x} {:032b}",
-                    self.csr[csr::MHARTID],
-                    self.pc,
-                    opcode,
-                    instruction,
-                    instruction
-                );
-                return Err(Unimplemented);
+                return Err(IllegalOpcode(instruction));
             }
         };
 
         Ok((instruction, decoded))
     }
 
+    fn decode_16(instruction: u16) -> Result<(u32, InstructionFormat), Fault> {
+        let (op, func3) = ((instruction & 0b11) as u8, (instruction >> 13) as u8);
+        let ins = match (op, func3) {
+            // c.lui
+            (0b01, 0b011) => {
+                let rd= ((instruction >> 7) & 0b11111) as u8;
+                let imm = (((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10) as i32;
+                // CI-type
+                U {
+                    opcode: 0b0110111,
+                    rd,
+                    imm,
+                }
+            },
+            // c.li
+            (0b01, 0b010) => {
+                let rd= ((instruction >> 7) & 0b11111) as u8;
+                let imm = ((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10;
+                // CI-Type
+                I {
+                    opcode: 0b0010011,
+                    rd,
+                    funct3: 0x0,
+                    rs1: 0x00,
+                    imm,
+                }
+            },
+            _ => return Err(IllegalOpcode(instruction as u32)),
+        };
+        Ok((instruction as u32, ins))
+    }
+}
+
+impl<BT: Device> Hart<BT> {
     fn execute_instruction(
         &mut self,
         instruction: InstructionFormat,
@@ -829,19 +887,19 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 if rd != 0 {
-                    eprintln!(
-                        "CSR {} to {} = {:x}",
-                        Csr::name(imm as u32),
-                        reg(rd),
-                        self.get_register(rs1)
-                    );
+                    // eprintln!(
+                    //     "CSR {} to {} = {:x}",
+                    //     Csr::name(imm as u32),
+                    //     reg(rd),
+                    //     self.get_register(rs1)
+                    // );
                     self.set_register(rd, self.csr[imm as usize]);
                 } else {
-                    eprintln!(
-                        "CSR {} = {:x}",
-                        Csr::name(imm as u32),
-                        self.get_register(rs1)
-                    );
+                    // eprintln!(
+                    //     "CSR {} = {:x}",
+                    //     Csr::name(imm as u32),
+                    //     self.get_register(rs1)
+                    // );
                 }
                 self.csr[imm as usize] = self.get_register(rs1);
 
@@ -861,22 +919,21 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, self.csr[imm as usize]);
 
                 if rs1 != 0 {
-                    eprintln!(
-                        "CSR {} to {} = {:x}->{:x}",
-                        Csr::name(imm as u32),
-                        reg(rd),
-                        self.csr[imm as usize],
-                        (self.csr[imm as usize] | self.get_register(rs1))
-                    );
+                    // eprintln!(
+                    //     "CSR {} to {} = {:x}->{:x}",
+                    //     Csr::name(imm as u32),
+                    //     reg(rd),
+                    //     self.csr[imm as usize],
+                    //     (self.csr[imm as usize] | self.get_register(rs1))
+                    // );
                     self.csr[imm as usize] |= self.get_register(rs1);
-                }
-                {
-                    eprintln!(
-                        "CSR {} to {} = {:x}",
-                        Csr::name(imm as u32),
-                        reg(rd),
-                        self.csr[imm as usize]
-                    );
+                } else {
+                    // eprintln!(
+                    //     "CSR {} to {} = {:x}",
+                    //     Csr::name(imm as u32),
+                    //     reg(rd),
+                    //     self.csr[imm as usize]
+                    // );
                 }
 
                 self.dbgins(
