@@ -7,7 +7,7 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
 use crate::plic::Fault;
-use crate::plic::Fault::{Halt, IllegalOpcode, Unimplemented};
+use crate::plic::Fault::{Halt, IllegalOpcode};
 use crate::see;
 
 pub struct Hart<BT: Device> {
@@ -123,7 +123,7 @@ impl Instruction {
     fn decode_32(instruction: u32) -> Result<(u32, InstructionFormat), Fault> {
         let opcode = (instruction & 0b1111111) as u8;
         let decoded = match opcode {
-            0b0110011 => {
+            0b0110011 | 0b0101111 => {
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b11111) as u8;
@@ -212,18 +212,19 @@ impl Instruction {
         let ins = match (op, func3) {
             // c.lui
             (0b01, 0b011) => {
-                let rd= ((instruction >> 7) & 0b11111) as u8;
-                let imm = (((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10) as i32;
+                let rd = ((instruction >> 7) & 0b11111) as u8;
+                let imm =
+                    (((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10) as i32;
                 // CI-type
                 U {
                     opcode: 0b0110111,
                     rd,
                     imm,
                 }
-            },
+            }
             // c.li
             (0b01, 0b010) => {
-                let rd= ((instruction >> 7) & 0b11111) as u8;
+                let rd = ((instruction >> 7) & 0b11111) as u8;
                 let imm = ((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10;
                 // CI-Type
                 I {
@@ -233,7 +234,20 @@ impl Instruction {
                     rs1: 0x00,
                     imm,
                 }
-            },
+            }
+            // c.bnez -> bne rs', x0, 2*imm
+            (0b01, 0b111) => {
+                let rs1 = ((instruction >> 7) & 0b111) as u8;
+                let imm = ((((instruction << 3) & 0b111) | ((instruction << 5) & 0b111)) as i16) >> 8;
+                // CB-Type
+                B {
+                    opcode: 0b1100011,
+                    funct3: 0x1,
+                    rs1,
+                    rs2: 0,
+                    imm: imm * 2,
+                }
+            }
             _ => return Err(IllegalOpcode(instruction as u32)),
         };
         Ok((instruction as u32, ins))
@@ -960,6 +974,23 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(
                     ins,
                     format!("csrrc\t{},{},{}", reg(rd), Csr::name(imm as u32), reg(rs1)),
+                )
+            }
+
+            // Atomics
+            // amoadd.w
+            R {
+                opcode: 0b0101111,
+                rd,
+                funct3: 0b010,
+                rs1,
+                rs2,
+                funct7: 0,
+            } => {
+                // skip atomics
+                self.dbgins(
+                    ins,
+                    format!("amoadd.w\t{},{}({})", reg(rd), reg(rs2), reg(rs1)),
                 )
             }
 
