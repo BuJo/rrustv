@@ -110,6 +110,7 @@ limitations under the License.
 * [RISC-V: A Bare-metal Introduction using C++. Machine Mode Timer](https://philmulholland.medium.com/risc-v-a-bare-metal-introduction-with-c-machine-mode-timer-790f55f2c96c)
 * [Demystifying the RISC-V Linux software stack](https://www.european-processor-initiative.eu/wp-content/uploads/2022/06/Nick-Kossifidis-@-RISC-V-Week.pdf)
 * [6.S081: Interrupts](https://pdos.csail.mit.edu/6.828/2021/slides/6s081-lec-interrupts.pdf)
+* [RISC-V Bytes: Introduction to Instruction Formats](https://danielmangum.com/posts/risc-v-bytes-intro-instruction-formats/)
 
 ### Device Trees
 

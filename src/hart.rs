@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Mul;
 use std::sync::Arc;
 
 use InstructionFormat::{B, I, J, R, S, U};
@@ -84,27 +85,33 @@ impl<BT: Device> Hart<BT> {
     }
 
     fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
-        let ins = self.bus.read_word(self.pc as usize)?;
-        eprintln!(
-            "[{}] [{:#x}] {:02b} {:07b} Opcode for ins {:08x} {:032b}",
-            self.csr[csr::MHARTID],
-            self.pc,
-            ins & 0b11,
-            ins & 0b1111111,
-            ins,
-            ins
-        );
         // Assuming little-endian, the first byte contains the opcode
         let ins = self.bus.read_word(self.pc as usize)?;
         match ins & 0b11 {
             // 32-bit instruction
             0b11 => {
+                eprintln!(
+                    "[{}] [{:#x}] {:07b} Opcode for ins {:08x} {:032b}",
+                    self.csr[csr::MHARTID],
+                    self.pc,
+                    ins & 0b11,
+                    ins,
+                    ins
+                );
                 self.pc += 4;
                 Ok(Instruction::IRV32(ins))
             }
             // 16-bit compressed instruction
             _ => {
                 let ins = self.bus.read_half(self.pc as usize)?;
+                eprintln!(
+                    "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
+                    self.csr[csr::MHARTID],
+                    self.pc,
+                    ins & 0b11,
+                    ins,
+                    ins
+                );
                 self.pc += 2;
                 Ok(Instruction::CRV32(ins))
             }
@@ -208,48 +215,84 @@ impl Instruction {
     }
 
     fn decode_16(instruction: u16) -> Result<(u32, InstructionFormat), Fault> {
-        let (op, func3) = ((instruction & 0b11) as u8, (instruction >> 13) as u8);
-        let ins = match (op, func3) {
-            // c.lui
-            (0b01, 0b011) => {
-                let rd = ((instruction >> 7) & 0b11111) as u8;
-                let imm =
-                    (((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10) as i32;
-                // CI-type
-                U {
-                    opcode: 0b0110111,
-                    rd,
-                    imm,
+        const RVC_REG_OFFSET: u8 = 0x8;
+
+        let op = instruction & 0b11;
+
+        let ins = match op {
+            // C0
+            0b00 => {
+                let funct3 = instruction >> 13;
+                match funct3 {
+                    // CIW-Type: c.addi4spn -> addi rd', x2, imm
+                    0b000 => {
+                        let rd = ((instruction >> 2) & 0b111) as u8;
+                        //  nzuimm[5:4|9:6|2|3]
+                        let imm = (((instruction >> 7) as u8 & 0b1111) << 4)
+                            | (((instruction >> 11) as u8 & 0b11) << 2)
+                            | (((instruction >> 5) as u8 & 0b1) << 1)
+                            | ((instruction >> 6) as u8 & 0b1);
+                        let imm = imm as u16;
+                        I {
+                            opcode: 0b0010011,
+                            rd: rd + RVC_REG_OFFSET,
+                            funct3: 0x0,
+                            rs1: 0x02,
+                            imm: imm.overflowing_mul(4).0 as i16,
+                        }
+                    }
+                    0b010 => {
+                        return Err(IllegalOpcode(instruction as u32));
+                    }
+                    _ => {
+                        return Err(IllegalOpcode(instruction as u32));
+                    }
                 }
             }
-            // c.li
-            (0b01, 0b010) => {
-                let rd = ((instruction >> 7) & 0b11111) as u8;
-                let imm = ((((instruction << 3) & 0x8000) | (instruction << 8)) as i16) >> 10;
-                // CI-Type
-                I {
-                    opcode: 0b0010011,
-                    rd,
-                    funct3: 0x0,
-                    rs1: 0x00,
-                    imm,
+            // C1
+            0b01 => {
+                let funct3 = instruction >> 13;
+                match funct3 {
+                    // CI-Type: c.nop
+                    0b000 => {
+                        // addi x0, x0, 0
+                        I {
+                            opcode: 0b0010011,
+                            rd: 0,
+                            funct3: 0,
+                            rs1: 0,
+                            imm: 0,
+                        }
+                    }
+                    // CI-Type: c.li -> addi rd, x0, nzimm
+                    0b010 => {
+                        let rd = ((instruction >> 7) & 0b11111) as u8;
+                        //  nzuimm[5|4:0]
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                            | (((instruction >> 2) as u8 & 0b11111) << 2);
+                        let imm = (imm as i8) >> 2;
+                        I {
+                            opcode: 0b0010011,
+                            rd,
+                            funct3: 0x0,
+                            rs1: 0x00,
+                            imm: imm as i16,
+                        }
+                    }
+                    _ => {
+                        return Err(IllegalOpcode(instruction as u32));
+                    }
                 }
             }
-            // c.bnez -> bne rs', x0, 2*imm
-            (0b01, 0b111) => {
-                let rs1 = ((instruction >> 7) & 0b111) as u8;
-                let imm = ((((instruction << 3) & 0b111) | ((instruction << 5) & 0b111)) as i16) >> 8;
-                // CB-Type
-                B {
-                    opcode: 0b1100011,
-                    funct3: 0x1,
-                    rs1,
-                    rs2: 0,
-                    imm: imm * 2,
-                }
+            // C2
+            0b10 => {
+                return Err(IllegalOpcode(instruction as u32));
             }
-            _ => return Err(IllegalOpcode(instruction as u32)),
+            _ => {
+                panic!("Instruction should be type C")
+            }
         };
+
         Ok((instruction as u32, ins))
     }
 }
@@ -426,12 +469,17 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let val = self.get_register(rs1).wrapping_add(imm as u32);
-                self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                if rd == 0 {
+                    self.dbgins(ins, "nop".to_string())
+                } else {
+                    self.set_register(rd, val);
+
+                    self.dbgins(
+                        ins,
+                        format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    )
+                }
             }
             // XOR immediate
             I {
@@ -698,7 +746,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("beq\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) == self.get_register(rs2) {
@@ -713,7 +762,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("bne\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) != self.get_register(rs2) {
@@ -728,7 +778,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("blt\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
@@ -743,7 +794,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("bge\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if (self.get_register(rs1) as i32) >= (self.get_register(rs2) as i32) {
@@ -758,7 +810,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(
                     ins,
                     format!("bgltu\t{},{},{:x}", reg(rs1), reg(rs2), target),
@@ -776,7 +829,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("bgeu\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) >= self.get_register(rs2) {
@@ -790,7 +844,8 @@ impl<BT: Device> Hart<BT> {
                 rd,
                 imm,
             } => {
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(4);
+                let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
                 self.dbgins(ins, format!("jal\t{},{:x}", reg(rd), target));
 
                 self.set_register(rd, self.pc);
@@ -1008,7 +1063,17 @@ impl<BT: Device> Hart<BT> {
 
     fn dbgins(&self, ins: u32, asm: String) {
         //eprintln!("[{}] {:}: {}", self.csr[csr::MHARTID], ins, asm);
-        eprintln!("{:08x}:\t{:08x}          \t{}", self.pc - 4, ins, asm)
+        let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
+        if isize == 4 {
+            eprintln!("{:08x}:\t{:08x}          \t{}", self.pc - isize, ins, asm)
+        } else {
+            eprintln!(
+                "{:08x}:\t{:04x}                \t{}",
+                self.pc - isize,
+                ins,
+                asm
+            )
+        }
     }
 }
 
@@ -1170,7 +1235,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::bus::Bus;
-    use crate::hart::{Hart, InstructionFormat, REGMAP};
+    use crate::hart::{Hart, Instruction, InstructionFormat, REGMAP};
     use crate::ram::Ram;
     use crate::rom::Rom;
 
@@ -1238,10 +1303,9 @@ mod tests {
 
     #[test]
     fn test_sw_80000130() {
-        let ins = 0x0181a023;
-        let m = hart();
+        let ins = Instruction::IRV32(0x0181a023);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::S {
                 opcode,
@@ -1262,10 +1326,9 @@ mod tests {
 
     #[test]
     fn test_add_80000154() {
-        let ins = 0x015a8ab3;
-        let m = hart();
+        let ins = Instruction::IRV32(0x015a8ab3);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::R {
                 opcode,
@@ -1288,10 +1351,9 @@ mod tests {
 
     #[test]
     fn test_addi_8000015c() {
-        let ins = 0xffe00b13;
-        let m = hart();
+        let ins = Instruction::IRV32(0xffe00b13);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::I {
                 opcode,
@@ -1312,10 +1374,9 @@ mod tests {
 
     #[test]
     fn test_lw_800032a0() {
-        let ins = 0x17812483;
-        let m = hart();
+        let ins = Instruction::IRV32(0x17812483);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::I {
                 opcode,
@@ -1336,11 +1397,11 @@ mod tests {
 
     #[test]
     fn test_jal_8000329c() {
-        let ins = 0x0200006f;
+        let ins = Instruction::IRV32(0x0200006f);
         let mut m = hart();
         m.pc = 0x8000329c;
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::J { opcode, rd, imm } => {
                 assert_eq!(opcode, 0b1101111, "opcode wrong");
@@ -1350,7 +1411,7 @@ mod tests {
             _ => assert!(false, "not J"),
         }
 
-        m.execute_instruction(decoded, ins).expect("execute");
+        m.execute_instruction(decoded, 0x0200006f).expect("execute");
 
         // Unsure why...
         //assert_eq!(m.pc, 0x800032bc);
@@ -1358,11 +1419,11 @@ mod tests {
 
     #[test]
     fn test_auipc_800032c0() {
-        let ins = 0x00001f17;
+        let ins = Instruction::IRV32(0x00001f17);
         let mut m = hart();
         m.pc = 0x800032c0 + 4;
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::U { opcode, rd, imm } => {
                 assert_eq!(opcode, 0b0010111, "opcode wrong");
@@ -1372,17 +1433,16 @@ mod tests {
             _ => assert!(false, "not auipc"),
         }
 
-        m.execute_instruction(decoded, ins).expect("execute");
+        m.execute_instruction(decoded, 0x00001f17).expect("execute");
 
         assert_eq!(m.get_register(treg("t5")), 0x800032c0 + (0x1 << 12));
     }
 
     #[test]
     fn test_magic_800032c4() {
-        let ins = 0xd41f2023;
-        let m = hart();
+        let ins = Instruction::IRV32(0xd41f2023);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
+        let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::S {
                 opcode,
@@ -1403,11 +1463,10 @@ mod tests {
 
     #[test]
     fn test_beq_8000093c() {
-        let ins = 0x00258593;
-        let m = hart();
+        let ins = Instruction::IRV32(0x00258593);
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
-        println!("{:032b} {}", ins, decoded);
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:032b} {}", 0x00258593, decoded);
         match decoded {
             InstructionFormat::I {
                 opcode,
@@ -1429,12 +1488,12 @@ mod tests {
     #[test]
     fn test_beq_80000134() {
         // j	80000938
-        let ins = 0x0050006f;
+        let ins = Instruction::IRV32(0x0050006f);
         let mut m = hart();
         m.pc = 0x80000134;
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
-        println!("{:032b} {}", ins, decoded);
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:032b} {}", 0x0050006f, decoded);
         match decoded {
             InstructionFormat::J { opcode, rd, imm } => {
                 assert_eq!(opcode, 0b1101111, "opcode wrong");
@@ -1444,21 +1503,18 @@ mod tests {
             _ => assert!(false, "not sw"),
         }
 
-        m.execute_instruction(decoded, ins).expect("execute");
-
-        // Unsure why...
-        //assert_eq!(m.pc, 0x80000938, "should have jumped");
+        m.execute_instruction(decoded, 0x0050006f).expect("execute");
     }
 
     #[test]
     fn test_beq_80000938() {
         // beq	s3,s3,80000138
-        let ins = 0x813980e3;
+        let ins = Instruction::IRV32(0x813980e3);
         let mut m = hart();
         m.pc = 0x80000134;
 
-        let decoded = m.decode_instruction(ins).expect("decode").1;
-        println!("{:032b} {}", ins, decoded);
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:032b} {}", 0x813980e3u32, decoded);
         match decoded {
             InstructionFormat::B {
                 opcode,
@@ -1477,9 +1533,55 @@ mod tests {
         }
 
         m.set_register(treg("s3"), 0x55555555);
-        m.execute_instruction(decoded, ins).expect("execute");
+        m.execute_instruction(decoded, 0x813980e3).expect("execute");
+    }
 
-        // Unsure why...
-        // assert_eq!(m.pc, 0x80000138, "should have jumped");
+    #[test]
+    fn test_caddi4spn_80000122() {
+        // c.addi4spn x14, 28
+        let ins = Instruction::CRV32(0x0878);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:032b} {}", 0x0050006f, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rd, treg("a4"), "rd wrong");
+                assert_eq!(rs1, treg("sp"), "rs1 wrong");
+                assert_eq!(imm, 28, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+    #[test]
+    fn test_cli_80000120() {
+        // li	a0,-32
+        let ins = Instruction::CRV32(0x5501);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:016b} {}", 0x5501, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rd, treg("a0"), "rd wrong");
+                assert_eq!(rs1, treg("zero"), "rs1 wrong");
+                assert_eq!(imm, -32, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
     }
 }
