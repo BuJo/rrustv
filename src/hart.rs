@@ -314,14 +314,36 @@ impl Instruction {
                     // CI-Type: c.lui -> addi rd, x0, nzimm
                     0b011 => {
                         let rd = ((instruction >> 7) & 0b11111) as u8;
-                        //  nzuimm[5|4:0]
-                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
-                            | (((instruction >> 2) as u8 & 0b11111) << 2);
-                        let imm = (imm as i8) >> 2;
-                        U {
-                            opcode: 0b0110111,
-                            rd,
-                            imm: imm as i32,
+
+                        if rd == 0x2 {
+                            // c.addi16sp
+                            // nzimm[9] nzimm[4|6|8:7|5]
+                            let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                                | (((instruction >> 6) as u8 & 0b1) << 2)
+                                | (((instruction >> 5) as u8 & 0b1) << 4)
+                                | (((instruction >> 3) as u8 & 0b11) << 5)
+                                | (((instruction >> 2) as u8 & 0b1) << 3);
+                            let imm = ((imm as i8) as i16) << 2;
+
+                            I {
+                                opcode: 0b0010011,
+                                rd,
+                                funct3: 0x0,
+                                rs1: 0x2, // sp
+                                imm,
+                            }
+                        } else {
+                            // c.lui
+                            //  nzuimm[5|4:0]
+                            let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                                | (((instruction >> 2) as u8 & 0b11111) << 2);
+                            let imm = (imm as i8) >> 2;
+
+                            U {
+                                opcode: 0b0110111,
+                                rd,
+                                imm: imm as i32,
+                            }
                         }
                     }
                     _ => {
