@@ -343,6 +343,20 @@ impl Instruction {
                         rs1: rs2,
                         imm: 0,
                     },
+                    // CI-Type: c.lwsp x4, 0
+                    0b0100 | 0b0101 => {
+                        let rs1 = ((instruction >> 7) & 0b11111) as u8;
+                        let imm = (((instruction >> 2) as u8 & 0b11) << 6)
+                            | (((instruction >> 12) as u8 & 0b1) << 5)
+                            | (((instruction >> 4) as u8 & 0b111) << 2);
+                        I {
+                            opcode: 0b0000011,
+                            funct3: 0x2,
+                            rd: rs1,
+                            rs1: 0x2, // sp
+                            imm: imm as i16,
+                        }
+                    }
                     // CSS-Type: c.swsp x4, 0
                     0b1100 | 0b1101 => {
                         //  uimm[5:2|7:6]
@@ -736,10 +750,11 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u32)) as usize;
+
+                self.dbgins(ins, format!("lw\t{},{}({})", reg(rd), imm, reg(rs1)));
+
                 let val = self.bus.read_word(addr)?;
                 self.set_register(rd, val);
-
-                self.dbgins(ins, format!("lw\t{},{}({})", reg(rd), imm, reg(rs1)))
             }
             // lbu Load Byte (U, zero extends)
             I {
