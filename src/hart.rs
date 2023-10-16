@@ -343,6 +343,29 @@ impl Instruction {
                         rs1: rs2,
                         imm: 0,
                     },
+                    // CR-Type: c.add / c.ebreak
+                    0b1001 => {
+                        if rs1 == 0 && rs2 == 0 {
+                            // c.ebreak
+                            I {
+                                opcode: 0b1110011,
+                                funct3: 0x0,
+                                imm: 0x1,
+                                rd: 0,
+                                rs1: 0,
+                            }
+                        } else {
+                            // c.add
+                            R {
+                                opcode: 0b0110011,
+                                rd: rs1,
+                                funct3: 0x0,
+                                funct7: 0x0,
+                                rs1,
+                                rs2,
+                            }
+                        }
+                    }
                     // CI-Type: c.lwsp x4, 0
                     0b0100 | 0b0101 => {
                         let rs1 = ((instruction >> 7) & 0b11111) as u8;
