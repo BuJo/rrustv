@@ -230,13 +230,13 @@ impl Instruction {
                         let imm = (((instruction >> 6) as u8 & 0b1) << 3)
                             | (((instruction >> 5) as u8 & 0b1) << 7)
                             | (((instruction >> 10) as u8 & 0b111) << 4);
-                        let imm = imm >> 3;
+                        let imm = imm >> 1;
                         I {
                             opcode: 0b0000011,
                             rd: rd + RVC_REG_OFFSET,
                             funct3: 0x2,
                             rs1: rs1 + RVC_REG_OFFSET,
-                            imm: imm.overflowing_mul(4).0 as i16,
+                            imm: imm as i16,
                         }
                     }
                     // CS-Type: c.sw -> sw rs1', (4*imm)(rs2')
@@ -246,13 +246,13 @@ impl Instruction {
                         let imm = (((instruction >> 6) as u8 & 0b1) << 3)
                             | (((instruction >> 5) as u8 & 0b1) << 7)
                             | (((instruction >> 10) as u8 & 0b111) << 4);
-                        let imm = imm >> 3;
+                        let imm = imm >> 1;
                         S {
                             opcode: 0b0100011,
                             funct3: 0x2,
                             rs1: rs1 + RVC_REG_OFFSET,
                             rs2: rs2 + RVC_REG_OFFSET,
-                            imm: imm.overflowing_mul(4).0 as i16,
+                            imm: imm as i16,
                         }
                     }
                     // CIW-Type: c.addi4spn -> addi rd', x2, imm
@@ -362,13 +362,12 @@ impl Instruction {
                         //  uimm[5:2|7:6]
                         let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
                             | (((instruction >> 7) as u8 & 0b11) << 6);
-                        let imm = imm >> 2;
                         S {
                             opcode: 0b0100011,
                             funct3: 0x2,
                             rs1: 0x2, // sp
                             rs2,
-                            imm: imm.overflowing_mul(4).0 as i16,
+                            imm: imm as i16,
                         }
                     }
                     _ => {
