@@ -346,6 +346,96 @@ impl Instruction {
                             }
                         }
                     }
+                    0b100 => {
+                        let funct2 = (instruction >> 10) & 0b11;
+                        let rd = (instruction >> 7) as u8 & 0b111;
+                        // imm/shamt[5] imm/shamt[4:0]
+                        let imm = ((instruction >> 5) as u8 & 0b1000_0000)
+                            | (instruction as u8 & 0b111_1100);
+                        let imm = (imm as i8 >> 2) as i16;
+
+                        // CR-Type: c.srli/c.srai/c.andi
+                        match funct2 {
+                            // c.srli
+                            0b00 => I {
+                                opcode: 0b0010011,
+                                rd: rd + RVC_REG_OFFSET,
+                                funct3: 0x5,
+                                rs1: rd + RVC_REG_OFFSET,
+                                imm,
+                            },
+                            // c.srai
+                            0b01 => {
+                                let imm = ((instruction >> 5) as u8 & 0b1000_0000)
+                                    | (instruction as u8 & 0b111_1100);
+                                let imm = ((imm >> 2) as u16 & 0b0000_0000_0001_1111) | (0x20 << 5);
+                                I {
+                                    opcode: 0b0010011,
+                                    rd: rd + RVC_REG_OFFSET,
+                                    funct3: 0x5,
+                                    rs1: rd + RVC_REG_OFFSET,
+                                    imm: imm as i16,
+                                }
+                            },
+                            // c.andi
+                            0b10 => I {
+                                opcode: 0b0010011,
+                                rd: rd + RVC_REG_OFFSET,
+                                funct3: 0x7,
+                                rs1: rd + RVC_REG_OFFSET,
+                                imm,
+                            },
+                            // CS-Type: c.and/c.or/c.xor/c.sub
+                            _ => {
+                                let funct6 = (instruction >> 10) as u8 & 0b111111;
+                                let funct2 = (instruction >> 5) as u8 & 0b11;
+                                let rd = (instruction >> 7) as u8 & 0b111;
+                                let rs2 = (instruction >> 2) as u8 & 0b111;
+
+                                match (funct6, funct2) {
+                                    // c.and
+                                    (0b100011, 0b11) => R {
+                                        opcode: 0b0110011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x7,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x00,
+                                    },
+                                    // c.or
+                                    (0b100011, 0b10) => R {
+                                        opcode: 0b0110011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x6,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x00,
+                                    },
+                                    // c.xor
+                                    (0b100011, 0b01) => R {
+                                        opcode: 0b0110011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x4,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x00,
+                                    },
+                                    // c.sub
+                                    (0b100011, 0b00) => R {
+                                        opcode: 0b0110011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x0,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x20,
+                                    },
+                                    _ => {
+                                        return Err(IllegalOpcode(instruction as u32));
+                                    }
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         return Err(IllegalOpcode(instruction as u32));
                     }
@@ -592,7 +682,7 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(ins, format!("sltu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
 
-            // ADD immediate
+            // addi ADD immediate
             I {
                 opcode: 0b0010011,
                 rd,
@@ -613,7 +703,7 @@ impl<BT: Device> Hart<BT> {
                     )
                 }
             }
-            // XOR immediate
+            // xori XOR immediate
             I {
                 opcode: 0b0010011,
                 rd,
@@ -629,7 +719,7 @@ impl<BT: Device> Hart<BT> {
                     format!("xor\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
-            // OR immediate
+            // ori OR immediate
             I {
                 opcode: 0b0010011,
                 rd,
@@ -645,7 +735,7 @@ impl<BT: Device> Hart<BT> {
                     format!("or\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
-            // AND immediate
+            // andi AND immediate
             I {
                 opcode: 0b0010011,
                 rd,
@@ -713,7 +803,7 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(
                     ins,
-                    format!("srai\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    format!("srai\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), (imm & 0b11111), val),
                 )
             }
             // slti Set Less Than Imm
