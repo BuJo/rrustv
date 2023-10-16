@@ -241,8 +241,8 @@ impl Instruction {
                     }
                     // CS-Type: c.sw -> sw rs1', (4*imm)(rs2')
                     0b110 => {
-                        let rs1 = ((instruction >> 2) & 0b111) as u8;
-                        let rs2 = ((instruction >> 7) & 0b111) as u8;
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let rs2 = ((instruction >> 2) & 0b111) as u8;
                         let imm = (((instruction >> 6) as u8 & 0b1) << 3)
                             | (((instruction >> 5) as u8 & 0b1) << 7)
                             | (((instruction >> 10) as u8 & 0b111) << 4);
