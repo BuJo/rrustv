@@ -1,5 +1,4 @@
 use std::fmt;
-use std::ops::Mul;
 use std::sync::Arc;
 
 use InstructionFormat::{B, I, J, R, S, U};
@@ -224,6 +223,38 @@ impl Instruction {
             0b00 => {
                 let funct3 = instruction >> 13;
                 match funct3 {
+                    // CL-Type: c.lw -> lw rd', (4*imm)(sp)
+                    0b010 => {
+                        let rd = ((instruction >> 2) & 0b111) as u8;
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let imm = (((instruction >> 6) as u8 & 0b1) << 3)
+                            | (((instruction >> 5) as u8 & 0b1) << 7)
+                            | (((instruction >> 10) as u8 & 0b111) << 4);
+                        let imm = imm >> 3;
+                        I {
+                            opcode: 0b0000011,
+                            rd: rd + RVC_REG_OFFSET,
+                            funct3: 0x2,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            imm: imm.overflowing_mul(4).0 as i16,
+                        }
+                    }
+                    // CS-Type: c.sw -> sw rs1', (4*imm)(rs2')
+                    0b110 => {
+                        let rs1 = ((instruction >> 2) & 0b111) as u8;
+                        let rs2 = ((instruction >> 7) & 0b111) as u8;
+                        let imm = (((instruction >> 6) as u8 & 0b1) << 3)
+                            | (((instruction >> 5) as u8 & 0b1) << 7)
+                            | (((instruction >> 10) as u8 & 0b111) << 4);
+                        let imm = imm >> 3;
+                        S {
+                            opcode: 0b0100011,
+                            funct3: 0x2,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            rs2: rs2 + RVC_REG_OFFSET,
+                            imm: imm.overflowing_mul(4).0 as i16,
+                        }
+                    }
                     // CIW-Type: c.addi4spn -> addi rd', x2, imm
                     0b000 => {
                         let rd = ((instruction >> 2) & 0b111) as u8;
@@ -241,9 +272,6 @@ impl Instruction {
                             imm: imm.overflowing_mul(4).0 as i16,
                         }
                     }
-                    0b010 => {
-                        return Err(IllegalOpcode(instruction as u32));
-                    }
                     _ => {
                         return Err(IllegalOpcode(instruction as u32));
                     }
@@ -253,15 +281,19 @@ impl Instruction {
             0b01 => {
                 let funct3 = instruction >> 13;
                 match funct3 {
-                    // CI-Type: c.nop
+                    // CI-Type: c.nop || c.addi x2, -1
                     0b000 => {
                         // addi x0, x0, 0
+                        let rd = ((instruction >> 7) & 0b11111) as u8;
+                        let imm = ((((instruction >> 2) & 0b11111) as u8) << 2)
+                            | ((((instruction >> 12) & 0b1) as u8) << 7);
+                        let imm = (imm as i8) >> 2;
                         I {
                             opcode: 0b0010011,
-                            rd: 0,
+                            rd,
                             funct3: 0,
-                            rs1: 0,
-                            imm: 0,
+                            rs1: rd,
+                            imm: imm as i16,
                         }
                     }
                     // CI-Type: c.li -> addi rd, x0, nzimm
@@ -279,6 +311,19 @@ impl Instruction {
                             imm: imm as i16,
                         }
                     }
+                    // CI-Type: c.lui -> addi rd, x0, nzimm
+                    0b011 => {
+                        let rd = ((instruction >> 7) & 0b11111) as u8;
+                        //  nzuimm[5|4:0]
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                            | (((instruction >> 2) as u8 & 0b11111) << 2);
+                        let imm = (imm as i8) >> 2;
+                        U {
+                            opcode: 0b0110111,
+                            rd,
+                            imm: imm as i32,
+                        }
+                    }
                     _ => {
                         return Err(IllegalOpcode(instruction as u32));
                     }
@@ -286,7 +331,36 @@ impl Instruction {
             }
             // C2
             0b10 => {
-                return Err(IllegalOpcode(instruction as u32));
+                let funct4 = instruction >> 12;
+                let rs1 = ((instruction >> 7) & 0b11111) as u8;
+                let rs2 = ((instruction >> 2) & 0b11111) as u8;
+                match funct4 {
+                    // CR-Type: c.mv x12, x1
+                    0b1000 => I {
+                        opcode: 0b0010011,
+                        rd: rs1,
+                        funct3: 0x0,
+                        rs1: rs2,
+                        imm: 0,
+                    },
+                    // CSS-Type: c.swsp x4, 0
+                    0b1100 | 0b1101 => {
+                        //  uimm[5:2|7:6]
+                        let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
+                            | (((instruction >> 7) as u8 & 0b11) << 6);
+                        let imm = imm >> 2;
+                        S {
+                            opcode: 0b0100011,
+                            funct3: 0x2,
+                            rs1: 0x2, // sp
+                            rs2,
+                            imm: imm.overflowing_mul(4).0 as i16,
+                        }
+                    }
+                    _ => {
+                        return Err(IllegalOpcode(instruction as u32));
+                    }
+                }
             }
             _ => {
                 panic!("Instruction should be type C")
@@ -1560,6 +1634,7 @@ mod tests {
             _ => assert!(false, "not sw"),
         }
     }
+
     #[test]
     fn test_cli_80000120() {
         // li	a0,-32
@@ -1580,6 +1655,81 @@ mod tests {
                 assert_eq!(rd, treg("a0"), "rd wrong");
                 assert_eq!(rs1, treg("zero"), "rs1 wrong");
                 assert_eq!(imm, -32, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+
+    #[test]
+    fn test_clw_80000140() {
+        // c.lw x12, 48(x12)
+        let ins = Instruction::CRV32(0x5a10);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:016b} {}", 0x5a10, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0000011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rd, treg("a2"), "rd wrong");
+                assert_eq!(rs1, treg("a2"), "rs1 wrong");
+                assert_eq!(imm, 48, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+
+    #[test]
+    fn test_clw_800001c0() {
+        // lw	a4,4(s1)
+        let ins = Instruction::CRV32(0x40d8);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:016b} {}", 0x40d8, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0000011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rd, treg("a4"), "rd wrong");
+                assert_eq!(rs1, treg("s1"), "rs1 wrong");
+                assert_eq!(imm, 4, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+
+    #[test]
+    fn test_clw_800002c0() {
+        // lw	s0,64(a1)
+        let ins = Instruction::CRV32(0x41a0);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:016b} {}", 0x41a0, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0000011, "opcode wrong");
+                assert_eq!(funct3, 0x2, "funct3 wrong");
+                assert_eq!(rd, treg("s0"), "rd wrong");
+                assert_eq!(rs1, treg("a1"), "rs1 wrong");
+                assert_eq!(imm, 64, "imm wrong");
             }
             _ => assert!(false, "not sw"),
         }
