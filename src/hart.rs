@@ -1,5 +1,5 @@
-use std::fmt;
 use std::sync::Arc;
+use std::{cmp, fmt};
 
 use InstructionFormat::{B, I, J, R, S, U};
 
@@ -1371,20 +1371,102 @@ impl<BT: Device> Hart<BT> {
             }
 
             // Atomics
-            // amoadd.w
             R {
                 opcode: 0b0101111,
                 rd,
-                funct3: 0b010,
+                funct3: 0x2,
                 rs1,
                 rs2,
-                funct7: 0,
+                funct7,
             } => {
-                // skip atomics
-                self.dbgins(
-                    ins,
-                    format!("amoadd.w\t{},{}({})", reg(rd), reg(rs2), reg(rs1)),
-                )
+                let funct5 = funct7 >> 2;
+                let _aq = (funct7 >> 1) & 0b1;
+                let _rl = funct7 & 0b1;
+
+                let addr = self.get_register(rs1) as usize;
+                let val = self.bus.read_word(addr)?;
+                let rs2val = self.get_register(rs2);
+                let new = match funct5 {
+                    // amoswap.w
+                    0x01 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoswap.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        let rdval = self.get_register(rd);
+                        self.set_register(rs2, rdval);
+                        rs2val
+                    }
+                    // amoadd.w
+                    0x00 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoadd.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+
+                        val.wrapping_add(rs2val)
+                    }
+                    // amoand.w
+                    0x0C => {
+                        self.dbgins(
+                            ins,
+                            format!("amoand.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val & rs2val
+                    }
+                    // amoor.w
+                    0x08 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val | rs2val
+                    }
+                    // amoxor.w
+                    0x04 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoxor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val ^ rs2val
+                    }
+                    // amomax.w
+                    0x14 => {
+                        self.dbgins(
+                            ins,
+                            format!("amomax.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::max(val as i32, rs2val as i32) as u32
+                    }
+                    // amomin.w
+                    0x10 => {
+                        self.dbgins(
+                            ins,
+                            format!("amomin.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::min(val as i32, rs2val as i32) as u32
+                    }
+                    // amomaxu.w
+                    0x1C => {
+                        self.dbgins(
+                            ins,
+                            format!("amomaxu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::max(val, rs2val)
+                    }
+                    // amominu.w
+                    0x18 => {
+                        self.dbgins(
+                            ins,
+                            format!("amominu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::min(val, rs2val)
+                    }
+                    _ => return Err(IllegalOpcode(ins)),
+                };
+
+                self.set_register(rd, val);
+                self.bus.write_word(addr, new)?;
             }
 
             _ => {
