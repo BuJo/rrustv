@@ -376,7 +376,7 @@ impl Instruction {
                                     rs1: rd + RVC_REG_OFFSET,
                                     imm: imm as i16,
                                 }
-                            },
+                            }
                             // c.andi
                             0b10 => I {
                                 opcode: 0b0010011,
@@ -434,6 +434,78 @@ impl Instruction {
                                     }
                                 }
                             }
+                        }
+                    }
+                    // c.j
+                    0b101 => {
+                        // imm[11|4|9:8|10|6|7|3:1|5]
+                        let imm = (((instruction >> 12) & 0b1) << 15)
+                            | (((instruction >> 11) & 0b1) << 8)
+                            | (((instruction >> 9) & 0b11) << 12)
+                            | (((instruction >> 8) & 0b1) << 14)
+                            | (((instruction >> 7) & 0b1) << 10)
+                            | (((instruction >> 6) & 0b1) << 11)
+                            | (((instruction >> 3) & 0b111) << 5)
+                            | (((instruction >> 2) & 0b1) << 9);
+                        let imm = imm as i16 >> 5;
+                        J {
+                            opcode: 0b1101111,
+                            rd: 0x0,
+                            imm: (2 * imm) as i32,
+                        }
+                    }
+                    // c.jal
+                    0b001 => {
+                        // imm[11|4|9:8|10|6|7|3:1|5]
+                        let imm = (((instruction >> 12) & 0b1) << 15)
+                            | (((instruction >> 11) & 0b1) << 8)
+                            | (((instruction >> 9) & 0b11) << 12)
+                            | (((instruction >> 8) & 0b1) << 14)
+                            | (((instruction >> 7) & 0b1) << 10)
+                            | (((instruction >> 6) & 0b1) << 11)
+                            | (((instruction >> 3) & 0b111) << 5)
+                            | (((instruction >> 2) & 0b1) << 9);
+                        let imm = imm as i16 >> 5;
+                        J {
+                            opcode: 0b1101111,
+                            rd: 0x1,
+                            imm: (2 * imm) as i32,
+                        }
+                    }
+                    // c.beqz
+                    0b110 => {
+                        let rs1 = (instruction >> 7) as u8 & 0b111;
+                        // offset[8|4:3] offset[7:6|2:1|5]
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                            | (((instruction >> 10) as u8 & 0b11) << 2)
+                            | (((instruction >> 5) as u8 & 0b11) << 5)
+                            | (((instruction >> 3) as u8 & 0b11) << 0)
+                            | (((instruction >> 2) as u8 & 0b1) << 4);
+                        let imm = (imm as i8 as i16) << 1;
+                        B {
+                            opcode: 0b1100011,
+                            funct3: 0x0,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            rs2: 0x0,
+                            imm,
+                        }
+                    }
+                    // c.bnez
+                    0b111 => {
+                        let rs1 = (instruction >> 7) as u8 & 0b111;
+                        // offset[8|4:3] offset[7:6|2:1|5]
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
+                            | (((instruction >> 10) as u8 & 0b11) << 2)
+                            | (((instruction >> 5) as u8 & 0b11) << 5)
+                            | (((instruction >> 3) as u8 & 0b11) << 0)
+                            | (((instruction >> 2) as u8 & 0b1) << 4);
+                        let imm = (imm as i8 as i16) << 1;
+                        B {
+                            opcode: 0b1100011,
+                            funct3: 0x1,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            rs2: 0x0,
+                            imm,
                         }
                     }
                     _ => {
@@ -817,7 +889,13 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(
                     ins,
-                    format!("srai\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), (imm & 0b11111), val),
+                    format!(
+                        "srai\t{},{},{:#x} # {:x}",
+                        reg(rd),
+                        reg(rs1),
+                        (imm & 0b11111),
+                        val
+                    ),
                 )
             }
             // slti Set Less Than Imm
