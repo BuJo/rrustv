@@ -20,6 +20,12 @@ impl Rom {
 
         data.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        let data = self.data.read().unwrap();
+
+        data.is_empty()
+    }
 }
 
 impl Device for Rom {

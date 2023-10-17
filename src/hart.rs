@@ -479,7 +479,7 @@ impl Instruction {
                         let imm = (((instruction >> 12) as u8 & 0b1) << 7)
                             | (((instruction >> 10) as u8 & 0b11) << 2)
                             | (((instruction >> 5) as u8 & 0b11) << 5)
-                            | (((instruction >> 3) as u8 & 0b11) << 0)
+                            | ((instruction >> 3) as u8 & 0b11)
                             | (((instruction >> 2) as u8 & 0b1) << 4);
                         let imm = (imm as i8 as i16) << 1;
                         B {
@@ -497,7 +497,7 @@ impl Instruction {
                         let imm = (((instruction >> 12) as u8 & 0b1) << 7)
                             | (((instruction >> 10) as u8 & 0b11) << 2)
                             | (((instruction >> 5) as u8 & 0b11) << 5)
-                            | (((instruction >> 3) as u8 & 0b11) << 0)
+                            | ((instruction >> 3) as u8 & 0b11)
                             | (((instruction >> 2) as u8 & 0b1) << 4);
                         let imm = (imm as i8 as i16) << 1;
                         B {

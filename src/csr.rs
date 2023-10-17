@@ -149,7 +149,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (0x7B3, "dscratch1", Csr::index, Csr::index_mut),
 ];
 
-fn handle_nop_wr<'a>(csr: &'a mut Csr, _num: usize) -> &'a mut u32 {
+fn handle_nop_wr(csr: &mut Csr, _num: usize) -> &mut u32 {
     csr.index_mut(MSCRATCH)
 }
 
