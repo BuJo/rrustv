@@ -533,17 +533,40 @@ impl Instruction {
                             imm,
                         }
                     }
-                    // CR-Type: c.mv x12, x1
-                    0b1000 => I {
-                        opcode: 0b0010011,
-                        rd: rs1,
-                        funct3: 0x0,
-                        rs1: rs2,
-                        imm: 0,
-                    },
-                    // CR-Type: c.add / c.ebreak
+                    // CR-Type: c.mv x12, x1 / c.jr
+                    0b1000 => {
+                        // c.jr
+                        if rs1 != 0 && rs2 == 0 {
+                            I {
+                                opcode: 0b1100111,
+                                rd: 0x0, // x0
+                                funct3: 0x0,
+                                rs1,
+                                imm: 0,
+                            }
+                        } else {
+                            // c.mv
+                            I {
+                                opcode: 0b0010011,
+                                rd: rs1,
+                                funct3: 0x0,
+                                rs1: rs2,
+                                imm: 0,
+                            }
+                        }
+                    }
+                    // CR-Type: c.add / c.ebreak / c.jalr
                     0b1001 => {
-                        if rs1 == 0 && rs2 == 0 {
+                        if rs1 != 0 && rs2 == 0 {
+                            // c.jalr
+                            I {
+                                opcode: 0b1100111,
+                                rd: 0x1, // ra
+                                funct3: 0x0,
+                                rs1,
+                                imm: 0,
+                            }
+                        } else if rs1 == 0 && rs2 == 0 {
                             // c.ebreak
                             I {
                                 opcode: 0b1110011,
