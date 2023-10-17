@@ -447,6 +447,20 @@ impl Instruction {
                 let rs1 = ((instruction >> 7) & 0b11111) as u8;
                 let rs2 = ((instruction >> 2) & 0b11111) as u8;
                 match funct4 {
+                    // CI-Type: c.slli
+                    0b0000 | 0b0001 => {
+                        // imm/shamt[5] imm/shamt[4:0]
+                        let imm = ((instruction >> 5) as u8 & 0b1000_0000)
+                            | (instruction as u8 & 0b111_1100);
+                        let imm = (imm as i8 >> 2) as i16;
+                        I {
+                            opcode: 0b0010011,
+                            rd: rs1,
+                            funct3: 0x1,
+                            rs1,
+                            imm,
+                        }
+                    }
                     // CR-Type: c.mv x12, x1
                     0b1000 => I {
                         opcode: 0b0010011,
