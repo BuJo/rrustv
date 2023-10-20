@@ -12,18 +12,18 @@ use crate::reg::reg;
 use crate::see;
 
 pub struct Hart<BT: Device> {
-    start_pc: u32,
+    start_pc: usize,
 
     bus: Arc<BT>,
     registers: [u32; 32],
-    pc: u32,
+    pc: usize,
     csr: Csr,
 
     stop: bool,
 }
 
 impl<BT: Device> Hart<BT> {
-    pub fn new(id: u32, pc: u32, bus: Arc<BT>) -> Self {
+    pub fn new(id: u32, pc: usize, bus: Arc<BT>) -> Self {
         let mut m = Hart {
             start_pc: pc,
             bus,
@@ -571,7 +571,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("beq\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) == self.get_register(rs2) {
@@ -587,7 +587,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("bne\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) != self.get_register(rs2) {
@@ -603,7 +603,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("blt\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
@@ -619,7 +619,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("bge\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if (self.get_register(rs1) as i32) >= (self.get_register(rs2) as i32) {
@@ -635,7 +635,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(
                     ins,
                     format!("bgltu\t{},{},{:x}", reg(rs1), reg(rs2), target),
@@ -654,7 +654,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("bgeu\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) >= self.get_register(rs2) {
@@ -669,10 +669,10 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let isize = if ins & 0b11 == 0b11 { 4 } else { 2 };
-                let target = self.pc.wrapping_add(imm as u32).wrapping_sub(isize);
+                let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("jal\t{},{:x}", reg(rd), target));
 
-                self.set_register(rd, self.pc);
+                self.set_register(rd, self.pc as u32);
                 self.pc = target;
             }
             // jalr Jump And Link Reg
@@ -689,8 +689,8 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("jalr\t{},{}({})", reg(rd), imm, reg(rs1)));
 
-                self.set_register(rd, self.pc);
-                self.pc = target;
+                self.set_register(rd, self.pc as u32);
+                self.pc = target as usize;
             }
 
             // lui Load Upper Imm
@@ -712,7 +712,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 // one instruction length less
-                let val = (self.pc - 4).wrapping_add((imm as u32) << 12);
+                let val = (self.pc as u32 - 4).wrapping_add((imm as u32) << 12);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))

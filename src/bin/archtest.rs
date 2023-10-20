@@ -52,7 +52,7 @@ fn main() {
 
     let bus = Arc::new(bus);
 
-    let mut m = Hart::new(0, pc as u32, bus.clone());
+    let mut m = Hart::new(0, pc, bus.clone());
     let mut i = 0;
     loop {
         match m.tick() {
