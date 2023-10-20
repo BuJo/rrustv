@@ -73,7 +73,7 @@ class rriscv(pluginTemplate):
         # Note the march is not hardwired here, because it will change for each
         # test. Similarly the output elf name and compile macros will be assigned later in the
         # runTests function
-        self.compile_cmd = 'riscv{1}-unknown-elf-gcc -march={0} \
+        self.compile_cmd = ' -march={0} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T ' + self.pluginpath + '/env/link.ld\
          -I ' + self.pluginpath + '/env/\
@@ -145,9 +145,15 @@ class rriscv(pluginTemplate):
             # prefix with "-D". The following does precisely that.
             compile_macros = ' -D' + " -D".join(testentry['macros'])
 
+            compiler = "riscv{0}-unknown-elf-gcc".format(self.xlen)
+            if shutil.which(compiler) is None:
+                compiler = "riscv{0}-unknown-linux-gnu-gcc".format(self.xlen)
+                if shutil.which(compiler) is None:
+                    logger.error(compiler+": executable not found. Please check environment setup.")
+                    raise SystemExit(1)
             # substitute all variables in the compile command that we created in the initialize
             # function
-            cmd = self.compile_cmd.format(testentry['isa'].lower(), self.xlen, test, elf, compile_macros)
+            cmd = compiler + self.compile_cmd.format(testentry['isa'].lower(), self.xlen, test, elf, compile_macros)
 
             # if the user wants to disable running the tests and only compile the tests, then
             # the "else" clause is executed below assigning the sim command to simple no action

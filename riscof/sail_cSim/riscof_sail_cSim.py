@@ -41,8 +41,8 @@ class sail_cSim(pluginTemplate):
     def initialise(self, suite, work_dir, archtest_env):
         self.suite = suite
         self.work_dir = work_dir
-        self.objdump_cmd = 'riscv{1}-unknown-elf-objdump -D {0} > {2};'
-        self.compile_cmd = 'riscv{1}-unknown-elf-gcc -march={0} \
+        self.objdump_cmd = 'riscv{1}-unknown-linux-gnu-objdump -D {0} > {2};'
+        self.compile_cmd = 'riscv{1}-unknown-linux-gnu-gcc -march={0} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles\
          -T '+self.pluginpath+'/env/link.ld\
          -I '+self.pluginpath+'/env/\
@@ -65,12 +65,16 @@ class sail_cSim(pluginTemplate):
             self.isa += 'd'
         objdump = "riscv{0}-unknown-elf-objdump".format(self.xlen)
         if shutil.which(objdump) is None:
-            logger.error(objdump+": executable not found. Please check environment setup.")
-            raise SystemExit(1)
+             objdump = "riscv{0}-unknown-linux-gnu-objdump".format(self.xlen)
+             if shutil.which(objdump) is None:
+                logger.error(objdump+": executable not found. Please check environment setup.")
+                raise SystemExit(1)
         compiler = "riscv{0}-unknown-elf-gcc".format(self.xlen)
         if shutil.which(compiler) is None:
-            logger.error(compiler+": executable not found. Please check environment setup.")
-            raise SystemExit(1)
+            compiler = "riscv{0}-unknown-linux-gnu-gcc".format(self.xlen)
+            if shutil.which(compiler) is None:
+                logger.error(compiler+": executable not found. Please check environment setup.")
+                raise SystemExit(1)
         if shutil.which(self.sail_exe[self.xlen]) is None:
             logger.error(self.sail_exe[self.xlen]+ ": executable not found. Please check environment setup.")
             raise SystemExit(1)
@@ -94,11 +98,11 @@ class sail_cSim(pluginTemplate):
 
             execute = "@cd "+testentry['work_dir']+";"
 
-            cmd = self.compile_cmd.format(testentry['isa'].lower(), '32') + ' ' + test + ' -o ' + elf
+            cmd = self.compile_cmd.format(testentry['isa'].lower(), self.xlen) + ' ' + test + ' -o ' + elf
             compile_cmd = cmd + ' -D' + " -D".join(testentry['macros'])
             execute+=compile_cmd+";"
 
-            execute += self.objdump_cmd.format(elf, '32', 'ref.disass')
+            execute += self.objdump_cmd.format(elf, self.xlen, 'ref.disass')
             sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
 
             execute += self.sail_exe[self.xlen] + ' --test-signature={0} {1} > {2}.log 2>&1;'.format(sig_file, elf, test_name)

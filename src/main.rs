@@ -9,7 +9,7 @@ use rriscv::rom::Rom;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let threads = args.get(1).and_then(|x| x.parse::<u32>().ok()).unwrap_or(1);
+    let threads = args.get(1).and_then(|x| x.parse::<u64>().ok()).unwrap_or(1);
 
     let text = fs::read("target/target.text").expect("no .text");
 

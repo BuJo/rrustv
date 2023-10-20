@@ -38,6 +38,20 @@ impl Default for Ram {
 }
 
 impl Device for Ram {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+        let mut shared = self.data.write().unwrap();
+
+        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
+        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
+        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((val >> 16) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 24) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 32) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 40) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 48) & 0xFF) as u8;
+        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 56) & 0xFF) as u8;
+
+        Ok(())
+    }
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         let mut shared = self.data.write().unwrap();
 
@@ -65,6 +79,19 @@ impl Device for Ram {
         Ok(())
     }
 
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        let data = self.data.read().unwrap();
+
+        let val: u64 = (*data.get(addr).ok_or(MemoryFault(addr))? as u64)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u64) << 8)
+            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u64) << 16)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 24)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 32)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 40)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 48)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 56);
+        Ok(val)
+    }
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let data = self.data.read().unwrap();
 

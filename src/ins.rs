@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::plic::Fault::{self, IllegalOpcode};
+use crate::plic::Fault::{self, IllegalOpcode, InstructionDecodingError};
 
 use self::InstructionFormat::{B, I, J, R, S, U};
 
@@ -113,20 +113,29 @@ impl fmt::Display for InstructionFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     IRV32(u32),
     CRV32(u16),
 }
 
 impl Instruction {
-    pub(crate) fn decode(self) -> Result<(u32, InstructionFormat), Fault> {
-        match self {
-            Instruction::IRV32(instruction) => Instruction::decode_32(instruction),
-            Instruction::CRV32(instruction) => Instruction::decode_16(instruction),
-        }
+    pub fn size(&self) -> usize {
+     match self {
+         Instruction::IRV32(_) => 4,
+         Instruction::CRV32(_) => 2
+     }
     }
 
-    fn decode_32(instruction: u32) -> Result<(u32, InstructionFormat), Fault> {
+    pub fn decode(self) -> Result<(Instruction, InstructionFormat), Fault> {
+        let res = match self {
+            Instruction::IRV32(instruction) => Instruction::decode_32(instruction),
+            Instruction::CRV32(instruction) => Instruction::decode_16(instruction),
+        };
+        res.map(|d| (self, d)).map_err(|_| IllegalOpcode(self))
+    }
+
+    fn decode_32(instruction: u32) -> Result<InstructionFormat, Fault> {
         let opcode = (instruction & 0b1111111) as u8;
         let decoded = match opcode {
             0b0110011 | 0b0101111 => {
@@ -206,14 +215,14 @@ impl Instruction {
                 U { opcode, rd, imm }
             }
             _ => {
-                return Err(IllegalOpcode(instruction));
+                return Err(InstructionDecodingError);
             }
         };
 
-        Ok((instruction, decoded))
+        Ok(decoded)
     }
 
-    fn decode_16(instruction: u16) -> Result<(u32, InstructionFormat), Fault> {
+    fn decode_16(instruction: u16) -> Result<InstructionFormat, Fault> {
         const RVC_REG_OFFSET: u8 = 0x8;
 
         let op = instruction & 0b11;
@@ -273,7 +282,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(IllegalOpcode(instruction as u32));
+                        return Err(InstructionDecodingError);
                     }
                 }
             }
@@ -430,7 +439,7 @@ impl Instruction {
                                         funct7: 0x20,
                                     },
                                     _ => {
-                                        return Err(IllegalOpcode(instruction as u32));
+                                        return Err(InstructionDecodingError);
                                     }
                                 }
                             }
@@ -509,7 +518,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(IllegalOpcode(instruction as u32));
+                        return Err(InstructionDecodingError);
                     }
                 }
             }
@@ -615,7 +624,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(IllegalOpcode(instruction as u32));
+                        return Err(InstructionDecodingError);
                     }
                 }
             }
@@ -624,7 +633,7 @@ impl Instruction {
             }
         };
 
-        Ok((instruction as u32, ins))
+        Ok(ins)
     }
 }
 

@@ -17,6 +17,13 @@ impl Default for Htif {
 }
 
 impl Device for Htif {
+    fn write_double(&self, addr: usize, _val: u64) -> Result<(), Fault> {
+        match addr {
+            0x0 => Err(Halt),
+            _ => Err(MemoryFault(addr)),
+        }
+    }
+
     fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
         match addr {
             0x0 => Err(Halt),
@@ -30,6 +37,10 @@ impl Device for Htif {
 
     fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
         Err(Unaligned(addr))
+    }
+
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        Err(MemoryFault(addr))
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {

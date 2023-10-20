@@ -29,6 +29,10 @@ impl Rom {
 }
 
 impl Device for Rom {
+    fn write_double(&self, addr: usize, _val: u64) -> Result<(), Fault> {
+        Err(MemoryFault(addr))
+    }
+
     fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
         Err(MemoryFault(addr))
     }
@@ -39,6 +43,20 @@ impl Device for Rom {
 
     fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
         Err(MemoryFault(addr))
+    }
+
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        let data = self.data.read().unwrap();
+
+        let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u64)
+            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u64) << 8)
+            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u64) << 16)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 24)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 32)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 40)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 48)
+            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 56);
+        Ok(val)
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {

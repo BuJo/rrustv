@@ -8,9 +8,9 @@ use crate::hart;
 use crate::plic::Fault;
 use crate::plic::Fault::Unimplemented;
 
-const SBI_VERSION: (u32, u32) = (1, 0);
-const SBI_IMPL_ID: u32 = 0xFFFFFFFF;
-const SBI_IMPL_VERSION: u32 = 1;
+const SBI_VERSION: (u64, u64) = (1, 0);
+const SBI_IMPL_ID: u64 = 0xFFFFFFFF;
+const SBI_IMPL_VERSION: u64 = 1;
 
 #[allow(dead_code)]
 #[allow(clippy::upper_case_acronyms)]
@@ -25,15 +25,15 @@ enum Register {
     EID = 17,
 }
 
-impl Index<Register> for [u32; 32] {
-    type Output = u32;
+impl Index<Register> for [u64; 32] {
+    type Output = u64;
 
     fn index(&self, idx: Register) -> &Self::Output {
         &self[idx as usize]
     }
 }
 
-impl IndexMut<Register> for [u32; 32] {
+impl IndexMut<Register> for [u64; 32] {
     fn index_mut(&mut self, idx: Register) -> &mut Self::Output {
         &mut self[idx as usize]
     }
@@ -67,19 +67,19 @@ impl From<io::Error> for Error {
 
 // Base Extension (EID #0x10)
 
-fn sbi_get_spec_version() -> Result<u32, Error> {
+fn sbi_get_spec_version() -> Result<u64, Error> {
     Ok((SBI_VERSION.0 << 24) + SBI_VERSION.1)
 }
 
-fn sbi_get_sbi_impl_id() -> Result<u32, Error> {
+fn sbi_get_sbi_impl_id() -> Result<u64, Error> {
     Ok(SBI_IMPL_ID)
 }
 
-fn sbi_get_sbi_impl_version() -> Result<u32, Error> {
+fn sbi_get_sbi_impl_version() -> Result<u64, Error> {
     Ok(SBI_IMPL_VERSION)
 }
 
-fn sbi_probe_extension(extension_id: u32) -> Result<u32, Error> {
+fn sbi_probe_extension(extension_id: u64) -> Result<u64, Error> {
     match extension_id {
         0x01 => Ok(1),
         0x02 => Ok(1),
@@ -88,21 +88,21 @@ fn sbi_probe_extension(extension_id: u32) -> Result<u32, Error> {
     }
 }
 
-fn sbi_get_mvendorid() -> Result<u32, Error> {
+fn sbi_get_mvendorid() -> Result<u64, Error> {
     Ok(0)
 }
 
-fn sbi_get_marchid() -> Result<u32, Error> {
+fn sbi_get_marchid() -> Result<u64, Error> {
     Ok(1)
 }
 
-fn sbi_get_mimpid() -> Result<u32, Error> {
+fn sbi_get_mimpid() -> Result<u64, Error> {
     Ok(SBI_IMPL_VERSION)
 }
 
 //  Legacy Extensions (EIDs #0x00 - #0x0F)
 
-fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
+fn sbi_console_putchar(value: u64) -> Result<u64, Error> {
     let char = [u8::try_from(value)?];
 
     let mut handle = io::stdout().lock();
@@ -112,13 +112,13 @@ fn sbi_console_putchar(value: u32) -> Result<u32, Error> {
     Ok(0)
 }
 
-fn sbi_console_getchar() -> Result<u32, Error> {
+fn sbi_console_getchar() -> Result<u64, Error> {
     let mut buffer = [0];
     io::stdin().read_exact(&mut buffer)?;
-    Ok(buffer[0] as u32)
+    Ok(buffer[0] as u64)
 }
 
-fn sbi_shutdown<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
+fn sbi_shutdown<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     hart.stop();
     Ok(0)
 }
@@ -127,9 +127,9 @@ fn sbi_shutdown<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
 
 fn sbi_system_reset<BT: Device>(
     hart: &mut hart::Hart<BT>,
-    reset_type: u32,
-    reset_reason: u32,
-) -> Result<u32, Error> {
+    reset_type: u64,
+    reset_reason: u64,
+) -> Result<u64, Error> {
     let reason = match reset_reason {
         0x00000000 => "No reason",
         0x00000001 => "System failure",
@@ -162,7 +162,7 @@ fn sbi_system_reset<BT: Device>(
 }
 
 // Legacy Extensions have a different calling convention
-fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
+fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     let func = hart.get_register(Register::EID as u8);
 
     let result = match func {
@@ -179,13 +179,13 @@ fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
-            hart.set_register(Register::ARG0 as u8, error as u32);
+            hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }
     }
 }
 
-fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
+fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     let func = (
         hart.get_register(Register::EID as u8),
         hart.get_register(Register::FID as u8),
@@ -209,13 +209,13 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u32, Error> {
 
     match result {
         Ok(value) => {
-            hart.set_register(Register::ARG0 as u8, Error::Success as u32);
+            hart.set_register(Register::ARG0 as u8, Error::Success as u64);
             hart.set_register(Register::ARG1 as u8, value);
             Ok(value)
         }
         Err(error) => {
             eprintln!("error in syscall: {:?}", func);
-            hart.set_register(Register::ARG0 as u8, error as u32);
+            hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }
     }

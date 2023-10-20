@@ -1,7 +1,7 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 
-const XLEN: u32 = 32;
+const XLEN: u64 = 32;
 
 pub const NUM_CSRS: usize = 4096;
 
@@ -18,8 +18,8 @@ pub const MHARTID: usize = 0xF14;
 pub const MCYCLE: usize = 0xB00;
 pub const MINSTRET: usize = 0xB02;
 
-type CsrFn = for<'a> fn(&'a Csr, usize) -> &u32;
-type CsrWrFn = for<'a> fn(&'a mut Csr, usize) -> &'a mut u32;
+type CsrFn = for<'a> fn(&'a Csr, usize) -> &u64;
+type CsrWrFn = for<'a> fn(&'a mut Csr, usize) -> &'a mut u64;
 
 const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     // Unprivileged Floating Point
@@ -149,20 +149,20 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (0x7B3, "dscratch1", Csr::index, Csr::index_mut),
 ];
 
-fn handle_nop_wr(csr: &mut Csr, _num: usize) -> &mut u32 {
+fn handle_nop_wr(csr: &mut Csr, _num: usize) -> &mut u64 {
     csr.index_mut(MSCRATCH)
 }
 
-fn handle_nop(csr: &Csr, _num: usize) -> &u32 {
+fn handle_nop(csr: &Csr, _num: usize) -> &u64 {
     csr.index(MSCRATCH)
 }
 
 pub struct Csr {
-    csrs: [u32; NUM_CSRS],
+    csrs: [u64; NUM_CSRS],
 }
 
 impl Csr {
-    pub fn new(id: u32) -> Csr {
+    pub fn new(id: u64) -> Csr {
         let mut csr = Self {
             csrs: [0; NUM_CSRS],
         };
@@ -195,7 +195,7 @@ impl Csr {
 }
 
 impl Index<usize> for Csr {
-    type Output = u32;
+    type Output = u64;
 
     fn index(&self, csr: usize) -> &Self::Output {
         &self.csrs[csr]
@@ -209,7 +209,7 @@ impl IndexMut<usize> for Csr {
 }
 
 impl Csr {
-    pub fn name(id: u32) -> &'static str {
+    pub fn name(id: u64) -> &'static str {
         for (i, s, ..) in CSR_MAP {
             if i == (id as usize) {
                 return s;

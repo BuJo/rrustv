@@ -39,6 +39,16 @@ impl Default for DynBus {
 }
 
 impl Device for DynBus {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_double(addr - range.start, val);
+            }
+        }
+        Err(MemoryFault(addr))
+    }
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         let devices = self.devices.read().unwrap();
 
@@ -72,6 +82,16 @@ impl Device for DynBus {
         Err(MemoryFault(addr))
     }
 
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_double(addr - range.start);
+            }
+        }
+        Err(MemoryFault(addr))
+    }
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let devices = self.devices.read().unwrap();
 

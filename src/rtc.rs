@@ -32,6 +32,17 @@ impl Default for Rtc {
 }
 
 impl Device for Rtc {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+        match addr {
+            MTIMECMP_ADDR => {
+                let mut v = self.mtimecmptmp.write().unwrap();
+                *v = val;
+                Ok(())
+            }
+            _ => Err(Fault::MemoryFault(addr)),
+        }
+    }
+
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
             MTIMECMP_ADDR => {
@@ -57,6 +68,16 @@ impl Device for Rtc {
 
     fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
         Err(Fault::Unaligned(addr))
+    }
+
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        let now = self.start.elapsed();
+
+        match addr {
+            MTIMECMP_ADDR => Ok(0xFFFFFFFF),
+            MTIME_ADDR => Ok(now.as_nanos()  as u64),
+            _ => Err(Fault::MemoryFault(addr)),
+        }
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
