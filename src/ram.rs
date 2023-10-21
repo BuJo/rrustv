@@ -41,24 +41,14 @@ impl Device for Ram {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
         let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
-        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
-        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((val >> 16) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 24) & 0xFF) as u8;
-        *(shared.get_mut(addr + 4).ok_or(MemoryFault(addr))?) = ((val >> 32) & 0xFF) as u8;
-        *(shared.get_mut(addr + 5).ok_or(MemoryFault(addr))?) = ((val >> 40) & 0xFF) as u8;
-        *(shared.get_mut(addr + 6).ok_or(MemoryFault(addr))?) = ((val >> 48) & 0xFF) as u8;
-        *(shared.get_mut(addr + 7).ok_or(MemoryFault(addr))?) = ((val >> 56) & 0xFF) as u8;
+        shared.splice(addr..(addr + 8), val.to_le_bytes());
 
         Ok(())
     }
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
-        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
-        *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((val >> 16) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 24) & 0xFF) as u8;
+        shared.splice(addr..(addr + 4), val.to_le_bytes());
 
         Ok(())
     }
@@ -66,8 +56,7 @@ impl Device for Ram {
     fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
         let mut shared = self.data.write().unwrap();
 
-        *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = (val & 0xFF) as u8;
-        *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
+        shared.splice(addr..(addr + 2), val.to_le_bytes());
 
         Ok(())
     }
@@ -82,32 +71,28 @@ impl Device for Ram {
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {
         let data = self.data.read().unwrap();
 
-        let val: u64 = (*data.get(addr).ok_or(MemoryFault(addr))? as u64)
-            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u64) << 8)
-            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u64) << 16)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 24)
-            + ((*data.get(addr + 4).ok_or(MemoryFault(addr))? as u64) << 32)
-            + ((*data.get(addr + 5).ok_or(MemoryFault(addr))? as u64) << 40)
-            + ((*data.get(addr + 6).ok_or(MemoryFault(addr))? as u64) << 48)
-            + ((*data.get(addr + 7).ok_or(MemoryFault(addr))? as u64) << 56);
+        let bytes = data.get(addr..(addr + 8)).ok_or(MemoryFault(addr))?;
+        let bytes = <[u8; 8]>::try_from(bytes).map_err(|_| MemoryFault(addr))?;
+
+        let val = u64::from_le_bytes(bytes);
         Ok(val)
     }
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let data = self.data.read().unwrap();
 
-        let val: u32 = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
-            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u32) << 8)
-            + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u32) << 16)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u32) << 24);
+        let bytes = data.get(addr..(addr + 4)).ok_or(MemoryFault(addr))?;
+        let bytes = <[u8; 4]>::try_from(bytes).map_err(|_| MemoryFault(addr))?;
+        let val = u32::from_le_bytes(bytes);
         Ok(val)
     }
 
     fn read_half(&self, addr: usize) -> Result<u16, Fault> {
         let data = self.data.read().unwrap();
 
-        let hw = (*data.get(addr).ok_or(MemoryFault(addr))? as u16)
-            + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u16) << 8);
-        Ok(hw)
+        let bytes = data.get(addr..(addr + 2)).ok_or(MemoryFault(addr))?;
+        let bytes = <[u8; 2]>::try_from(bytes).map_err(|_| MemoryFault(addr))?;
+        let val = u16::from_le_bytes(bytes);
+        Ok(val)
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
