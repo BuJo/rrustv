@@ -204,7 +204,7 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let (val, _) = self
                     .get_register(rs1)
-                    .overflowing_shl(self.get_register(rs2) as u32);
+                    .overflowing_shl((self.get_register(rs2) & 0b111111) as u32);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("sll\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -220,7 +220,7 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let (val, _) = self
                     .get_register(rs1)
-                    .overflowing_shr(self.get_register(rs2) as u32);
+                    .overflowing_shr((self.get_register(rs2) & 0b111111) as u32);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("srl\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -234,8 +234,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0x20,
             } => {
-                let (val, _) =
-                    (self.get_register(rs1) as i32).overflowing_shr(self.get_register(rs2) as u32);
+                let (val, _) = (self.get_register(rs1) as i64)
+                    .overflowing_shr((self.get_register(rs2) & 0b111111) as u32);
                 self.set_register(rd, val as u64);
 
                 self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -249,7 +249,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0x00,
             } => {
-                let val = if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
+                let val = if (self.get_register(rs1) as i64) < (self.get_register(rs2) as i64) {
                     1
                 } else {
                     0
@@ -285,7 +285,7 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
-                let val = self.get_register(rs1).wrapping_add(imm as u64);
+                let val = self.get_register(rs1).wrapping_add(imm as i64 as u64);
 
                 if rd == 0 {
                     self.dbgins(ins, "nop".to_string())
@@ -306,7 +306,7 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
-                let val = self.get_register(rs1) ^ (imm as u64);
+                let val = self.get_register(rs1) ^ (imm as i64 as u64);
                 self.set_register(rd, val);
 
                 self.dbgins(
@@ -354,9 +354,10 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x00 => {
-                let (val, _) = self
-                    .get_register(rs1)
-                    .overflowing_shl((imm & 0b11111) as u32);
+                let rs1val = self.get_register(rs1);
+                let shift = (imm & 0b111111) as u32;
+                let (val, _) = rs1val
+                    .overflowing_shl(shift);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("sll\t{},{},{:#x}", reg(rd), reg(rs1), imm))
@@ -369,10 +370,9 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x00 => {
-                let val = self
+                let (val, _) = self
                     .get_register(rs1)
-                    .overflowing_shr((imm & 0b11111) as u32)
-                    .0;
+                    .overflowing_shr((imm & 0b111111) as u32);
                 self.set_register(rd, val);
 
                 self.dbgins(
@@ -388,10 +388,9 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x10 => {
-                let val = (self.get_register(rs1) as i32)
-                    .overflowing_shr((imm & 0b11111) as u32)
-                    .0 as u64;
-                self.set_register(rd, val);
+                let (val, _) =
+                    (self.get_register(rs1) as i64).overflowing_shr((imm & 0b111111) as u32);
+                self.set_register(rd, val as u64);
 
                 self.dbgins(
                     ins,
@@ -412,7 +411,7 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
-                let val = if (self.get_register(rs1) as i32) < (imm as i32) {
+                let val = if (self.get_register(rs1) as i64) < (imm as i64) {
                     1
                 } else {
                     0
@@ -421,7 +420,7 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(
                     ins,
-                    format!("sr?i\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    format!("slti\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
             // sltiu Set Less Than Imm (U, zero extends)
@@ -468,25 +467,10 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
-                let val = self.bus.read_half(addr)? as i16;
+                let val = self.bus.read_half(addr)? as i16 as i64;
                 self.set_register(rd, val as u64);
 
                 self.dbgins(ins, format!("lh\t{},{}({})", reg(rd), imm, reg(rs1)))
-            }
-            // ld Load Word
-            I {
-                opcode: 0b0000011,
-                rd,
-                funct3: 0x3,
-                rs1,
-                imm,
-            } => {
-                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
-
-                self.dbgins(ins, format!("ld\t{},{}({})", reg(rd), imm, reg(rs1)));
-
-                let val = self.bus.read_double(addr)?;
-                self.set_register(rd, val);
             }
             // lw Load Word
             I {
@@ -502,6 +486,21 @@ impl<BT: Device> Hart<BT> {
 
                 let val = self.bus.read_word(addr)?;
                 self.set_register(rd, val as u64);
+            }
+            // ld Load Double
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x3,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
+
+                self.dbgins(ins, format!("ld\t{},{}({})", reg(rd), imm, reg(rs1)));
+
+                let val = self.bus.read_double(addr)?;
+                self.set_register(rd, val);
             }
             // lbu Load Byte (U, zero extends)
             I {
@@ -632,7 +631,7 @@ impl<BT: Device> Hart<BT> {
                 let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("blt\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
-                if (self.get_register(rs1) as i32) < (self.get_register(rs2) as i32) {
+                if (self.get_register(rs1) as i64) < (self.get_register(rs2) as i64) {
                     self.pc = target;
                 }
             }
@@ -648,7 +647,7 @@ impl<BT: Device> Hart<BT> {
                 let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("bge\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
-                if (self.get_register(rs1) as i32) >= (self.get_register(rs2) as i32) {
+                if (self.get_register(rs1) as i64) >= (self.get_register(rs2) as i64) {
                     self.pc = target;
                 }
             }
@@ -725,7 +724,6 @@ impl<BT: Device> Hart<BT> {
                 rd,
                 imm,
             } => {
-                // one instruction length less
                 let val = (imm << 12) as i64 as u64;
                 self.set_register(rd, val);
 
@@ -737,7 +735,6 @@ impl<BT: Device> Hart<BT> {
                 rd,
                 imm,
             } => {
-                // one instruction length less
                 let val = (imm << 12) as i64 as u64;
                 let val = (self.pc as u64 - 4).wrapping_add(val);
                 self.set_register(rd, val);
@@ -807,19 +804,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 if rd != 0 {
-                    // eprintln!(
-                    //     "CSR {} to {} = {:x}",
-                    //     Csr::name(imm as u64),
-                    //     reg(rd),
-                    //     self.get_register(rs1)
-                    // );
                     self.set_register(rd, self.csr[imm as usize]);
-                } else {
-                    // eprintln!(
-                    //     "CSR {} = {:x}",
-                    //     Csr::name(imm as u64),
-                    //     self.get_register(rs1)
-                    // );
                 }
                 self.csr[imm as usize] = self.get_register(rs1);
 
@@ -839,21 +824,7 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, self.csr[imm as usize]);
 
                 if rs1 != 0 {
-                    // eprintln!(
-                    //     "CSR {} to {} = {:x}->{:x}",
-                    //     Csr::name(imm as u64),
-                    //     reg(rd),
-                    //     self.csr[imm as usize],
-                    //     (self.csr[imm as usize] | self.get_register(rs1))
-                    // );
                     self.csr[imm as usize] |= self.get_register(rs1);
-                } else {
-                    // eprintln!(
-                    //     "CSR {} to {} = {:x}",
-                    //     Csr::name(imm as u64),
-                    //     reg(rd),
-                    //     self.csr[imm as usize]
-                    // );
                 }
 
                 self.dbgins(
@@ -949,7 +920,7 @@ impl<BT: Device> Hart<BT> {
                             ins,
                             format!("amomax.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
                         );
-                        cmp::max(val as i32, rs2val as i32) as u64
+                        cmp::max(val as i64, rs2val as i64) as u64
                     }
                     // amomin.w
                     0x10 => {
@@ -957,7 +928,7 @@ impl<BT: Device> Hart<BT> {
                             ins,
                             format!("amomin.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
                         );
-                        cmp::min(val as i32, rs2val as i32) as u64
+                        cmp::min(val as i64, rs2val as i64) as u64
                     }
                     // amomaxu.w
                     0x1C => {
@@ -1034,7 +1005,7 @@ mod tests {
         let bus = Bus::new(rom, ram);
         let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick().expect("tick");
-        assert_eq!(m.get_register(3) as i32, -1000, "x1 mismatch");
+        assert_eq!(m.get_register(3) as i64, -1000, "x1 mismatch");
     }
 
     #[test]
@@ -1140,5 +1111,31 @@ mod tests {
 
         m.set_register(treg("s3"), 0x55555555);
         m.execute_instruction(decoded, ins).expect("execute");
+    }
+
+    #[test]
+    fn test_rv64_sll_80000404() {
+        // beq	s3,s3,80000138
+        let ins = Instruction::IRV32(0x026b1b13);
+        let mut m = hart();
+        m.pc = 0x80000404;
+        m.set_register(treg("s6"), 0x40);
+        assert_eq!(m.get_register(treg("s6")), 0x40);
+
+        let decoded = ins.decode().expect("decode").1;
+        match decoded {
+            InstructionFormat::I { opcode, rd, funct3, rs1, imm } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x1, "funct3 wrong");
+                assert_eq!(rd, treg("s6"), "rd wrong");
+                assert_eq!(rs1, treg("s6"), "rs1 wrong");
+                assert_eq!(imm, 38, "imm wrong");
+            }
+            _ => assert!(false),
+        }
+
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.get_register(treg("s6")), 0x40 << 38);
     }
 }
