@@ -4,8 +4,8 @@ use std::sync::Arc;
 use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
-use crate::ins::{Instruction, InstructionFormat};
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
+use crate::ins::{Instruction, InstructionFormat};
 use crate::plic::Fault;
 use crate::plic::Fault::{Halt, IllegalOpcode};
 use crate::reg::reg;
@@ -353,16 +353,13 @@ impl<BT: Device> Hart<BT> {
                 funct3: 0x1,
                 rs1,
                 imm,
-            } if ((imm as u16) >> 5) == 0x00 => {
+            } if ((imm as u16) >> 6) == 0x00 => {
                 let (val, _) = self
                     .get_register(rs1)
                     .overflowing_shl((imm & 0b11111) as u32);
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("slli\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("sll\t{},{},{:#x}", reg(rd), reg(rs1), imm))
             }
             // srli Shift Right Logical Imm
             I {
@@ -371,7 +368,7 @@ impl<BT: Device> Hart<BT> {
                 funct3: 0x5,
                 rs1,
                 imm,
-            } if ((imm as u16) >> 5) == 0x00 => {
+            } if ((imm as u16) >> 6) == 0x00 => {
                 let val = self
                     .get_register(rs1)
                     .overflowing_shr((imm & 0b11111) as u32)
@@ -380,7 +377,7 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(
                     ins,
-                    format!("srli\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    format!("srl\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
             // srai Shift Right Arith Imm
@@ -390,7 +387,7 @@ impl<BT: Device> Hart<BT> {
                 funct3: 0x5,
                 rs1,
                 imm,
-            } if ((imm as u16) >> 5) == 0x20 => {
+            } if ((imm as u16) >> 6) == 0x10 => {
                 let val = (self.get_register(rs1) as i32)
                     .overflowing_shr((imm & 0b11111) as u32)
                     .0 as u64;
@@ -399,7 +396,7 @@ impl<BT: Device> Hart<BT> {
                 self.dbgins(
                     ins,
                     format!(
-                        "srai\t{},{},{:#x} # {:x}",
+                        "sra\t{},{},{:#x} # {:x}",
                         reg(rd),
                         reg(rs1),
                         (imm & 0b11111),
@@ -476,6 +473,21 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("lh\t{},{}({})", reg(rd), imm, reg(rs1)))
             }
+            // ld Load Word
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x3,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
+
+                self.dbgins(ins, format!("ld\t{},{}({})", reg(rd), imm, reg(rs1)));
+
+                let val = self.bus.read_double(addr)?;
+                self.set_register(rd, val);
+            }
             // lw Load Word
             I {
                 opcode: 0b0000011,
@@ -488,8 +500,8 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("lw\t{},{}({})", reg(rd), imm, reg(rs1)));
 
-                let val = self.bus.read_double(addr)?;
-                self.set_register(rd, val);
+                let val = self.bus.read_word(addr)?;
+                self.set_register(rd, val as u64);
             }
             // lbu Load Byte (U, zero extends)
             I {
@@ -528,7 +540,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
+                let addr = (self.get_register(rs1).wrapping_add(imm as i64 as u64)) as usize;
                 let val = (self.get_register(rs2) & 0xFF) as u8;
 
                 self.dbgins(ins, format!("sb\t{},{}({})", reg(rs2), imm, reg(rs1)));
@@ -542,7 +554,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
+                let addr = (self.get_register(rs1).wrapping_add(imm as i64 as u64)) as usize;
                 let val = (self.get_register(rs2) & 0xFFFF) as u16;
 
                 self.dbgins(ins, format!("sh\t{},{}({})", reg(rs2), imm, reg(rs1)));
@@ -556,10 +568,24 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
-                let val = self.get_register(rs2);
+                let addr = (self.get_register(rs1).wrapping_add(imm as i64 as u64)) as usize;
+                let val = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
 
                 self.dbgins(ins, format!("sw\t{},{}({})", reg(rs2), imm, reg(rs1)));
+                return self.bus.write_word(addr, val);
+            }
+            // sd Store Double
+            S {
+                opcode: 0b0100011,
+                funct3: 0x3,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as i64 as u64)) as usize;
+                let val = self.get_register(rs2);
+
+                self.dbgins(ins, format!("sd\t{},{}({})", reg(rs2), imm, reg(rs1)));
                 return self.bus.write_double(addr, val);
             }
             // beq Branch ==
@@ -570,7 +596,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let isize =ins.size();
+                let isize = ins.size();
                 let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(ins, format!("beq\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
@@ -634,7 +660,7 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 imm,
             } => {
-                let isize =ins.size();
+                let isize = ins.size();
                 let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
                 self.dbgins(
                     ins,
@@ -700,7 +726,7 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 // one instruction length less
-                let val = (imm as u64) << 12;
+                let val = (imm << 12) as i64 as u64;
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("lui\t{},{:#x}", reg(rd), imm))
@@ -712,7 +738,8 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 // one instruction length less
-                let val = (self.pc as u64 - 4).wrapping_add((imm as u64) << 12);
+                let val = (imm << 12) as i64 as u64;
+                let val = (self.pc as u64 - 4).wrapping_add(val);
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
@@ -973,12 +1000,7 @@ impl<BT: Device> Hart<BT> {
                 eprintln!("{:08x}:\t{:08x}          \t{}", self.pc - 4, ins, asm)
             }
             Instruction::CRV32(ins) => {
-                eprintln!(
-                    "{:08x}:\t{:04x}                \t{}",
-                    self.pc - 2,
-                    ins,
-                    asm
-                )
+                eprintln!("{:08x}:\t{:04x}                \t{}", self.pc - 2, ins, asm)
             }
         }
     }

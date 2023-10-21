@@ -45,10 +45,10 @@ impl Device for Ram {
         *(shared.get_mut(addr + 1).ok_or(MemoryFault(addr))?) = ((val >> 8) & 0xFF) as u8;
         *(shared.get_mut(addr + 2).ok_or(MemoryFault(addr))?) = ((val >> 16) & 0xFF) as u8;
         *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 24) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 32) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 40) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 48) & 0xFF) as u8;
-        *(shared.get_mut(addr + 3).ok_or(MemoryFault(addr))?) = ((val >> 56) & 0xFF) as u8;
+        *(shared.get_mut(addr + 4).ok_or(MemoryFault(addr))?) = ((val >> 32) & 0xFF) as u8;
+        *(shared.get_mut(addr + 5).ok_or(MemoryFault(addr))?) = ((val >> 40) & 0xFF) as u8;
+        *(shared.get_mut(addr + 6).ok_or(MemoryFault(addr))?) = ((val >> 48) & 0xFF) as u8;
+        *(shared.get_mut(addr + 7).ok_or(MemoryFault(addr))?) = ((val >> 56) & 0xFF) as u8;
 
         Ok(())
     }
@@ -86,10 +86,10 @@ impl Device for Ram {
             + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u64) << 8)
             + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u64) << 16)
             + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 24)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 32)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 40)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 48)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 56);
+            + ((*data.get(addr + 4).ok_or(MemoryFault(addr))? as u64) << 32)
+            + ((*data.get(addr + 5).ok_or(MemoryFault(addr))? as u64) << 40)
+            + ((*data.get(addr + 6).ok_or(MemoryFault(addr))? as u64) << 48)
+            + ((*data.get(addr + 7).ok_or(MemoryFault(addr))? as u64) << 56);
         Ok(val)
     }
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
@@ -132,12 +132,29 @@ mod tests {
     }
 
     #[test]
-    fn write_read_cycle() {
+    fn write_read_cycle_u16() {
         let ram = Ram::new();
-        ram.write(0, vec![0x13, 0x81, 0x00, 0x7d]);
+        ram.write_word(0, 0xdead).expect("written");
+        let i = ram.read_half(0).expect("read");
+
+        assert_eq!(i, 0xdead, "dead beef");
+    }
+
+    #[test]
+    fn write_read_cycle_u32() {
+        let ram = Ram::new();
         ram.write_word(0, 0xdeadbeef).expect("written");
         let i = ram.read_word(0).expect("read");
 
         assert_eq!(i, 0xdeadbeef, "dead beef");
+    }
+
+    #[test]
+    fn write_read_cycle_u64() {
+        let ram = Ram::new();
+        ram.write_double(0, 0xdeadbeef_11223344).expect("written");
+        let i = ram.read_double(0).expect("read");
+
+        assert_eq!(i, 0xdeadbeef_11223344, "dead beef");
     }
 }

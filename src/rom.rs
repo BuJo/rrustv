@@ -52,10 +52,10 @@ impl Device for Rom {
             + ((*data.get(addr + 1).ok_or(MemoryFault(addr))? as u64) << 8)
             + ((*data.get(addr + 2).ok_or(MemoryFault(addr))? as u64) << 16)
             + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 24)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 32)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 40)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 48)
-            + ((*data.get(addr + 3).ok_or(MemoryFault(addr))? as u64) << 56);
+            + ((*data.get(addr + 4).ok_or(MemoryFault(addr))? as u64) << 32)
+            + ((*data.get(addr + 5).ok_or(MemoryFault(addr))? as u64) << 40)
+            + ((*data.get(addr + 6).ok_or(MemoryFault(addr))? as u64) << 48)
+            + ((*data.get(addr + 7).ok_or(MemoryFault(addr))? as u64) << 56);
         Ok(val)
     }
 

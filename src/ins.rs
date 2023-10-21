@@ -121,10 +121,10 @@ pub enum Instruction {
 
 impl Instruction {
     pub fn size(&self) -> usize {
-     match self {
-         Instruction::IRV32(_) => 4,
-         Instruction::CRV32(_) => 2
-     }
+        match self {
+            Instruction::IRV32(_) => 4,
+            Instruction::CRV32(_) => 2,
+        }
     }
 
     pub fn decode(self) -> Result<(Instruction, InstructionFormat), Fault> {

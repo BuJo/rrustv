@@ -75,7 +75,7 @@ impl Device for Rtc {
 
         match addr {
             MTIMECMP_ADDR => Ok(0xFFFFFFFF),
-            MTIME_ADDR => Ok(now.as_nanos()  as u64),
+            MTIME_ADDR => Ok(now.as_nanos() as u64),
             _ => Err(Fault::MemoryFault(addr)),
         }
     }
