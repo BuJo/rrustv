@@ -264,6 +264,34 @@ impl Instruction {
                             imm: imm as i16,
                         }
                     }
+                    // CL-Type: c.ld -> ld rs1', (8*imm)(rs2')
+                    0b011 => {
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let rd = ((instruction >> 2) & 0b111) as u8;
+                        let imm = (((instruction >> 10) as u8 & 0b111) << 3)
+                            | (((instruction >> 5) as u8 & 0b11) << 6);
+                        I {
+                            opcode: 0b0000011,
+                            rd: rd + RVC_REG_OFFSET,
+                            funct3: 0x3,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            imm: imm as i16,
+                        }
+                    }
+                    // CS-Type: c.sd -> sd rs1', (8*imm)(rs2')
+                    0b111 => {
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let rs2 = ((instruction >> 2) & 0b111) as u8;
+                        let imm = (((instruction >> 10) as u8 & 0b111) << 3)
+                            | (((instruction >> 5) as u8 & 0b11) << 6);
+                        S {
+                            opcode: 0b0100011,
+                            funct3: 0x3,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            rs2: rs2 + RVC_REG_OFFSET,
+                            imm: imm as i16,
+                        }
+                    }
                     // CIW-Type: c.addi4spn -> addi rd', x2, imm
                     0b000 => {
                         let rd = ((instruction >> 2) & 0b111) as u8;
@@ -375,25 +403,28 @@ impl Instruction {
                         let funct2 = (instruction >> 10) & 0b11;
                         let rd = (instruction >> 7) as u8 & 0b111;
                         // imm/shamt[5] imm/shamt[4:0]
-                        let imm = ((instruction >> 5) as u8 & 0b1000_0000)
-                            | (instruction as u8 & 0b111_1100);
-                        let imm = (imm as i8 >> 2) as i16;
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 5)
+                            | ((instruction >> 2) as u8 & 0b11111);
 
                         // CR-Type: c.srli/c.srai/c.andi
                         match funct2 {
                             // c.srli
-                            0b00 => I {
-                                opcode: 0b0010011,
-                                rd: rd + RVC_REG_OFFSET,
-                                funct3: 0x5,
-                                rs1: rd + RVC_REG_OFFSET,
-                                imm,
+                            0b00 => {
+                                // srl -> sra
+                                let imm = imm as u16 & 0b111111;
+                                I {
+                                    opcode: 0b0010011,
+                                    rd: rd + RVC_REG_OFFSET,
+                                    funct3: 0x5,
+                                    rs1: rd + RVC_REG_OFFSET,
+                                    imm: imm as i16,
+                                }
                             },
                             // c.srai
                             0b01 => {
-                                let imm = ((instruction >> 5) as u8 & 0b1000_0000)
-                                    | (instruction as u8 & 0b111_1100);
-                                let imm = ((imm >> 2) as u16 & 0b0000_0000_0001_1111) | (0x20 << 5);
+                                // srl -> sra
+                                let imm = (imm as u16 & 0b111111) | (0x10 << 6);
+
                                 I {
                                     opcode: 0b0010011,
                                     rd: rd + RVC_REG_OFFSET,
@@ -403,12 +434,15 @@ impl Instruction {
                                 }
                             }
                             // c.andi
-                            0b10 => I {
-                                opcode: 0b0010011,
-                                rd: rd + RVC_REG_OFFSET,
-                                funct3: 0x7,
-                                rs1: rd + RVC_REG_OFFSET,
-                                imm,
+                            0b10 => {
+                                let imm = ((imm << 2) as i8 >> 2) as i16;
+                                I {
+                                    opcode: 0b0010011,
+                                    rd: rd + RVC_REG_OFFSET,
+                                    funct3: 0x7,
+                                    rs1: rd + RVC_REG_OFFSET,
+                                    imm,
+                                }
                             },
                             // CS-Type: c.and/c.or/c.xor/c.sub
                             _ => {
@@ -547,15 +581,14 @@ impl Instruction {
                     // CI-Type: c.slli
                     0b0000 | 0b0001 => {
                         // imm/shamt[5] imm/shamt[4:0]
-                        let imm = ((instruction >> 5) as u8 & 0b1000_0000)
-                            | (instruction as u8 & 0b111_1100);
-                        let imm = (imm as i8 >> 2) as i16;
+                        let imm = ((((instruction >> 12) as u8) & 0b1) << 5)
+                            | (((instruction >> 2) as u8) & 0b11111);
                         I {
                             opcode: 0b0010011,
                             rd: rs1,
                             funct3: 0x1,
                             rs1,
-                            imm,
+                            imm: imm as i16,
                         }
                     }
                     // CR-Type: c.mv x12, x1 / c.jr
@@ -626,6 +659,21 @@ impl Instruction {
                             imm: imm as i16,
                         }
                     }
+                    // CI-Type: c.ldsp x4, 0
+                    0b0110 | 0b0111 => {
+                        let rs1 = ((instruction >> 7) & 0b11111) as u8;
+                        // uimm[5|4:3|8:6]
+                        let imm = (((instruction >> 2) & 0b111) << 6)
+                            | (((instruction >> 12) & 0b1) << 5)
+                            | (((instruction >> 5) & 0b11) << 3);
+                        I {
+                            opcode: 0b0000011,
+                            funct3: 0x3,
+                            rd: rs1,
+                            rs1: 0x2, // sp
+                            imm: imm as i16,
+                        }
+                    }
                     // CSS-Type: c.swsp x4, 0
                     0b1100 | 0b1101 => {
                         //  uimm[5:2|7:6]
@@ -639,19 +687,17 @@ impl Instruction {
                             imm: imm as i16,
                         }
                     }
-                    // CSS-Type: c.fswsp x4, 0
+                    // CSS-Type: c.sdsp x4, 0
                     0b1110 | 0b1111 => {
-                        //  uimm[5:2|7:6]
-                        let _imm = (((instruction >> 9) as u8 & 0b1111) << 2)
-                            | (((instruction >> 7) as u8 & 0b11) << 6);
-                        // TODO: this should actually use floating point registers,
-                        //       however, it is needed for c.jalr validation
+                        //  uimm[5:3|8:6]
+                        let imm =
+                            ((instruction >> 10 & 0b111) << 3) | ((instruction >> 7 & 0b111) << 6);
                         S {
                             opcode: 0b0100011,
-                            funct3: 0x2,
+                            funct3: 0x3,
                             rs1: 0x2, // sp
                             rs2,
-                            imm: 0.0 as i16,
+                            imm: imm as i16,
                         }
                     }
                     _ => {
@@ -949,6 +995,31 @@ mod tests {
                 assert_eq!(rd, treg("s0"), "rd wrong");
                 assert_eq!(rs1, treg("a1"), "rs1 wrong");
                 assert_eq!(imm, 64, "imm wrong");
+            }
+            _ => assert!(false, "not sw"),
+        }
+    }
+    #[test]
+    fn test_csrai_8000041a() {
+        // lw	s0,64(a1)
+        let ins = Instruction::CRV32(0x966d);
+
+        let decoded = ins.decode().expect("decode").1;
+        println!("{:016b} {}", 0x41a0, decoded);
+        match decoded {
+            InstructionFormat::I {
+                opcode,
+                funct3,
+                rs1,
+                imm,
+                rd,
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x5, "funct3 wrong");
+                assert_eq!(rd, treg("a2"), "rd wrong");
+                assert_eq!(rs1, treg("a2"), "rs1 wrong");
+                assert_eq!(imm & 0b111111, 59, "imm wrong");
+                assert_eq!(imm >> 6, 0x10, "imm wrong");
             }
             _ => assert!(false, "not sw"),
         }

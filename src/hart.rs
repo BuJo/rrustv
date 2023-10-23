@@ -423,8 +423,8 @@ impl<BT: Device> Hart<BT> {
                 imm,
             } => {
                 if imm == 0 {
-                    let sign = ((self.get_register(rs1) & 0xFFFFFFFF) as u32) >> 31;
-                    self.set_register(rd, sign as u64);
+                    let extended = (self.get_register(rs1) & 0xFFFFFFFF) as i32;
+                    self.set_register(rd, extended.sext());
 
                     self.dbgins(ins, format!("sext.w\t{},{}", reg(rd), reg(rs1)))
                 } else {
@@ -493,11 +493,25 @@ impl<BT: Device> Hart<BT> {
                 funct3: 0x1,
                 rs1,
                 imm,
-            } if ((imm as u16) >> 6) == 0x00 => {
+            } => {
                 let rs1val = self.get_register(rs1);
                 let shift = (imm & 0b111111) as u32;
                 let (val, _) = rs1val.overflowing_shl(shift);
                 self.set_register(rd, val);
+
+                self.dbgins(ins, format!("sll\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+            // slliw Shift Left Logical Imm
+            I {
+                opcode: 0b0011011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                imm,
+            } => {
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .overflowing_shl((imm & 0b11111) as u32);
+                self.set_register(rd, val.sext());
 
                 self.dbgins(ins, format!("sll\t{},{},{:#x}", reg(rd), reg(rs1), imm))
             }
@@ -544,19 +558,13 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x10 => {
-                let (val, _) =
-                    (self.get_register(rs1) as i64).overflowing_shr((imm & 0b111111) as u32);
+                let shamt = (imm & 0b111111) as u32;
+                let (val, _) = (self.get_register(rs1) as i64).overflowing_shr(shamt);
                 self.set_register(rd, val.sext());
 
                 self.dbgins(
                     ins,
-                    format!(
-                        "sra\t{},{},{:#x} # {:x}",
-                        reg(rd),
-                        reg(rs1),
-                        (imm & 0b11111),
-                        val
-                    ),
+                    format!("sra\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), shamt, val),
                 )
             }
             // sraiw Shift Right Arith Imm
@@ -567,9 +575,8 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x10 => {
-                let (val, _) =
-                    ((self.get_register(rs1) & 0xFFFFFFFF) as i32)
-                        .overflowing_shr((imm & 0b11111) as u32);
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as i32)
+                    .overflowing_shr((imm & 0b11111) as u32);
                 self.set_register(rd, val.sext());
 
                 self.dbgins(
@@ -1470,7 +1477,6 @@ mod tests {
         assert_eq!(m.get_register(treg("gp")), 0x2);
     }
 
-
     #[test]
     fn test_li() {
         // beq	s3,s3,80000138
@@ -1482,7 +1488,11 @@ mod tests {
         let decoded = ins.decode().expect("decode").1;
         match decoded {
             InstructionFormat::I {
-                opcode, rd, funct3, rs1, imm
+                opcode,
+                rd,
+                funct3,
+                rs1,
+                imm,
             } => {
                 assert_eq!(opcode, 0b0010011, "opcode wrong");
                 assert_eq!(funct3, 0x0, "funct3 wrong");
