@@ -81,7 +81,7 @@ impl<BT: Device> Hart<BT> {
 
     fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
         // Assuming little-endian, the first byte contains the opcode
-        let ins = self.bus.read_word(self.pc as usize)?;
+        let ins = self.bus.read_word(self.pc)?;
         match ins & 0b11 {
             // 32-bit instruction
             0b11 => {
@@ -98,7 +98,7 @@ impl<BT: Device> Hart<BT> {
             }
             // 16-bit compressed instruction
             _ => {
-                let ins = self.bus.read_half(self.pc as usize)?;
+                let ins = self.bus.read_half(self.pc)?;
                 eprintln!(
                     "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
                     self.csr[csr::MHARTID],
@@ -1250,7 +1250,7 @@ impl<BT: Device> Hart<BT> {
                     self.csr[csr::MHARTID],
                     instruction
                 );
-                return Err(Fault::MemoryFault(self.pc as usize));
+                return Err(Fault::MemoryFault(self.pc));
             }
         };
         Ok(())

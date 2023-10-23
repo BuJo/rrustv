@@ -642,7 +642,7 @@ impl Instruction {
                     // CSS-Type: c.fswsp x4, 0
                     0b1110 | 0b1111 => {
                         //  uimm[5:2|7:6]
-                        let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
+                        let _imm = (((instruction >> 9) as u8 & 0b1111) << 2)
                             | (((instruction >> 7) as u8 & 0b11) << 6);
                         // TODO: this should actually use floating point registers,
                         //       however, it is needed for c.jalr validation
@@ -651,7 +651,7 @@ impl Instruction {
                             funct3: 0x2,
                             rs1: 0x2, // sp
                             rs2,
-                            imm: imm as i16,
+                            imm: 0.0 as i16,
                         }
                     }
                     _ => {
