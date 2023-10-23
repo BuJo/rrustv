@@ -191,9 +191,9 @@ impl<BT: Device> Hart<BT> {
                     .wrapping_add((self.get_register(rs2) & 0xFFFFFFFF) as u32);
                 self.set_register(rd, val.sext());
 
-                self.dbgins(ins, format!("add\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+                self.dbgins(ins, format!("addw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
-            // SUB
+            // sub SUB
             R {
                 opcode: 0b0110011,
                 rd,
@@ -206,6 +206,21 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("sub\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // subw SUB
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0x0,
+                rs1,
+                rs2,
+                funct7: 0x20,
+            } => {
+                let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .wrapping_sub((self.get_register(rs2) & 0xFFFFFFFF) as u32);
+                self.set_register(rd, val.sext());
+
+                self.dbgins(ins, format!("subw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
             // XOR
             R {
@@ -265,6 +280,21 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("sll\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
+            // sllw Shift Left Logical
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0x1,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .overflowing_shl((self.get_register(rs2) & 0b11111) as u32);
+                self.set_register(rd, val.sext());
+
+                self.dbgins(ins, format!("sll\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
             // srl Shift Left Logical
             R {
                 opcode: 0b0110011,
@@ -281,6 +311,21 @@ impl<BT: Device> Hart<BT> {
 
                 self.dbgins(ins, format!("srl\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
+            // srlw Shift Left Logical
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .overflowing_shr((self.get_register(rs2) & 0b11111) as u32);
+                self.set_register(rd, val.sext());
+
+                self.dbgins(ins, format!("srl\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
             // sra Shift Right Arith
             R {
                 opcode: 0b0110011,
@@ -292,6 +337,21 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let (val, _) = (self.get_register(rs1) as i64)
                     .overflowing_shr((self.get_register(rs2) & 0b111111) as u32);
+                self.set_register(rd, val as u64);
+
+                self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // sraw Shift Right Arith
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                rs2,
+                funct7: 0x20,
+            } => {
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as i32)
+                    .overflowing_shr((self.get_register(rs2) & 0b11111) as u32);
                 self.set_register(rd, val as u64);
 
                 self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -362,11 +422,11 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
-                if rd == 0 {
-                    self.dbgins(ins, "nop".to_string())
-                } else if imm == 0 {
-                    let sext = ((self.get_register(rs1) & 0xFFFFFFFF) as u32) >> 31;
-                    self.set_register(rd, sext as u64);
+                if imm == 0 {
+                    let sign = ((self.get_register(rs1) & 0xFFFFFFFF) as u32) >> 31;
+                    self.set_register(rd, sign as u64);
+
+                    self.dbgins(ins, format!("sext.w\t{},{}", reg(rd), reg(rs1)))
                 } else {
                     let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
                         .wrapping_add(imm as i32 as u32);
@@ -459,6 +519,23 @@ impl<BT: Device> Hart<BT> {
                     format!("srl\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val),
                 )
             }
+            // srliw Shift Right Logical Imm
+            I {
+                opcode: 0b0011011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } if ((imm as u16) >> 6) == 0x00 => {
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .overflowing_shr((imm & 0b11111) as u32);
+                self.set_register(rd, val.sext());
+
+                self.dbgins(
+                    ins,
+                    format!("srlw\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val),
+                )
+            }
             // srai Shift Right Arith Imm
             I {
                 opcode: 0b0010011,
@@ -475,6 +552,30 @@ impl<BT: Device> Hart<BT> {
                     ins,
                     format!(
                         "sra\t{},{},{:#x} # {:x}",
+                        reg(rd),
+                        reg(rs1),
+                        (imm & 0b11111),
+                        val
+                    ),
+                )
+            }
+            // sraiw Shift Right Arith Imm
+            I {
+                opcode: 0b0011011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } if ((imm as u16) >> 6) == 0x10 => {
+                let (val, _) =
+                    ((self.get_register(rs1) & 0xFFFFFFFF) as i32)
+                        .overflowing_shr((imm & 0b11111) as u32);
+                self.set_register(rd, val.sext());
+
+                self.dbgins(
+                    ins,
+                    format!(
+                        "sraw\t{},{},{:#x} # {:x}",
                         reg(rd),
                         reg(rs1),
                         (imm & 0b11111),
@@ -608,6 +709,20 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, val as u64);
 
                 self.dbgins(ins, format!("lhu\t{},{},{:#x}", reg(rd), reg(rs1), imm))
+            }
+            // lwu Load Word (U, zero extends)
+            I {
+                opcode: 0b0000011,
+                rd,
+                funct3: 0x6,
+                rs1,
+                imm,
+            } => {
+                let addr = (self.get_register(rs1).wrapping_add(imm as u64)) as usize;
+                let val = self.bus.read_word(addr)?;
+                self.set_register(rd, val as u64);
+
+                self.dbgins(ins, format!("lwu\t{},{},{:#x}", reg(rd), reg(rs1), imm))
             }
 
             // sb Store Byte
@@ -1256,5 +1371,33 @@ mod tests {
         m.execute_instruction(decoded, ins).expect("execute");
 
         assert_eq!(m.get_register(treg("gp")), 0x2);
+    }
+
+
+    #[test]
+    fn test_li() {
+        // beq	s3,s3,80000138
+        let ins = Instruction::IRV32(0x00000413);
+        let mut m = hart();
+        m.pc = 0x80000418;
+        m.set_register(treg("s0"), 0xdeadbeef);
+
+        let decoded = ins.decode().expect("decode").1;
+        match decoded {
+            InstructionFormat::I {
+                opcode, rd, funct3, rs1, imm
+            } => {
+                assert_eq!(opcode, 0b0010011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rd, treg("s0"), "rd wrong");
+                assert_eq!(rs1, treg("zero"), "rs1 wrong");
+                assert_eq!(imm, 0, "imm wrong");
+            }
+            _ => assert!(false),
+        }
+
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.get_register(treg("gp")), 0x0);
     }
 }
