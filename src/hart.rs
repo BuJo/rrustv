@@ -164,7 +164,7 @@ impl<BT: Device> Hart<BT> {
         match instruction {
             // RV32I
 
-            // ADD
+            // add ADD
             R {
                 opcode: 0b0110011,
                 rd,
@@ -175,6 +175,21 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let val = self.get_register(rs1).wrapping_add(self.get_register(rs2));
                 self.set_register(rd, val);
+
+                self.dbgins(ins, format!("add\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // addw ADD
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0x0,
+                rs1,
+                rs2,
+                funct7: 0x00,
+            } => {
+                let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .wrapping_add((self.get_register(rs2) & 0xFFFFFFFF) as u32);
+                self.set_register(rd, val.sext());
 
                 self.dbgins(ins, format!("add\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -336,6 +351,30 @@ impl<BT: Device> Hart<BT> {
                     self.dbgins(
                         ins,
                         format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
+                    )
+                }
+            }
+            // addiw ADD immediate word
+            I {
+                opcode: 0b0011011,
+                rd,
+                funct3: 0x0,
+                rs1,
+                imm,
+            } => {
+                if rd == 0 {
+                    self.dbgins(ins, "nop".to_string())
+                } else if imm == 0 {
+                    let sext = ((self.get_register(rs1) & 0xFFFFFFFF) as u32) >> 31;
+                    self.set_register(rd, sext as u64);
+                } else {
+                    let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                        .wrapping_add(imm as i32 as u32);
+                    self.set_register(rd, val.sext());
+
+                    self.dbgins(
+                        ins,
+                        format!("addw\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
                     )
                 }
             }
@@ -1183,5 +1222,39 @@ mod tests {
         m.execute_instruction(decoded, ins).expect("execute");
 
         assert_eq!(m.get_register(treg("s6")), 0x40 << 38);
+    }
+
+    #[test]
+    fn test_addw() {
+        // beq	s3,s3,80000138
+        let ins = Instruction::IRV32(0x015a81bb);
+        let mut m = hart();
+        m.pc = 0x80000404;
+        m.set_register(treg("gp"), 0x0);
+        m.set_register(treg("s5"), 0x1);
+
+        let decoded = ins.decode().expect("decode").1;
+        match decoded {
+            InstructionFormat::R {
+                opcode,
+                rd,
+                funct3,
+                rs1,
+                rs2,
+                funct7,
+            } => {
+                assert_eq!(opcode, 0b0111011, "opcode wrong");
+                assert_eq!(funct3, 0x0, "funct3 wrong");
+                assert_eq!(rd, treg("gp"), "rd wrong");
+                assert_eq!(rs1, treg("s5"), "rs1 wrong");
+                assert_eq!(rs2, treg("s5"), "rs1 wrong");
+                assert_eq!(funct7, 0x0, "funct7 wrong");
+            }
+            _ => assert!(false),
+        }
+
+        m.execute_instruction(decoded, ins).expect("execute");
+
+        assert_eq!(m.get_register(treg("gp")), 0x2);
     }
 }

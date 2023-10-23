@@ -138,7 +138,7 @@ impl Instruction {
     fn decode_32(instruction: u32) -> Result<InstructionFormat, Fault> {
         let opcode = (instruction & 0b1111111) as u8;
         let decoded = match opcode {
-            0b0110011 | 0b0101111 => {
+            0b0110011 | 0b0101111 | 0b0111011 => {
                 let rd = ((instruction >> 7) & 0b11111) as u8;
                 let funct3 = ((instruction >> 12) & 0b111) as u8;
                 let rs1 = ((instruction >> 15) & 0b11111) as u8;
@@ -153,7 +153,7 @@ impl Instruction {
                     funct7,
                 }
             }
-            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 | 0b0001111 => {
+            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 | 0b0001111 | 0b0011011 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
@@ -297,10 +297,26 @@ impl Instruction {
                         let imm = ((((instruction >> 2) & 0b11111) as u8) << 2)
                             | ((((instruction >> 12) & 0b1) as u8) << 7);
                         let imm = (imm as i8) >> 2;
+
                         I {
                             opcode: 0b0010011,
                             rd,
-                            funct3: 0,
+                            funct3: 0x0,
+                            rs1: rd,
+                            imm: imm as i16,
+                        }
+                    }
+                    // CI-Type: c.addiw x2, -1
+                    0b001 => {
+                        // addi x0, x0, 0
+                        let rd = ((instruction >> 7) & 0b11111) as u8;
+                        let imm = ((((instruction >> 2) & 0b11111) as u8) << 2)
+                            | ((((instruction >> 12) & 0b1) as u8) << 7);
+                        let imm = (imm as i8) >> 2;
+                        I {
+                            opcode: 0b0011011,
+                            rd,
+                            funct3: 0x0,
                             rs1: rd,
                             imm: imm as i16,
                         }
@@ -432,6 +448,24 @@ impl Instruction {
                                     // c.sub
                                     (0b100011, 0b00) => R {
                                         opcode: 0b0110011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x0,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x20,
+                                    },
+                                    // c.addw
+                                    (0b100111, 0b01) => R {
+                                        opcode: 0b0111011,
+                                        rd: rd + RVC_REG_OFFSET,
+                                        funct3: 0x0,
+                                        rs1: rd + RVC_REG_OFFSET,
+                                        rs2: rs2 + RVC_REG_OFFSET,
+                                        funct7: 0x00,
+                                    },
+                                    // c.subw
+                                    (0b100111, 0b00) => R {
+                                        opcode: 0b0111011,
                                         rd: rd + RVC_REG_OFFSET,
                                         funct3: 0x0,
                                         rs1: rd + RVC_REG_OFFSET,
