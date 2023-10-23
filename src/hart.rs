@@ -1062,8 +1062,8 @@ impl<BT: Device> Hart<BT> {
                 let _rl = funct7 & 0b1;
 
                 let addr = self.get_register(rs1) as usize;
-                let val = self.bus.read_double(addr)?;
-                let rs2val = self.get_register(rs2);
+                let val = self.bus.read_word(addr)?;
+                let rs2val = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
                 let new = match funct5 {
                     // amoswap.w
                     0x01 => {
@@ -1114,7 +1114,7 @@ impl<BT: Device> Hart<BT> {
                             ins,
                             format!("amomax.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
                         );
-                        cmp::max(val as i64, rs2val as i64) as u64
+                        cmp::max(val as i32, rs2val as i32) as u32
                     }
                     // amomin.w
                     0x10 => {
@@ -1122,7 +1122,7 @@ impl<BT: Device> Hart<BT> {
                             ins,
                             format!("amomin.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
                         );
-                        cmp::min(val as i64, rs2val as i64) as u64
+                        cmp::min(val as i32, rs2val as i32) as u32
                     }
                     // amomaxu.w
                     0x1C => {
@@ -1137,6 +1137,103 @@ impl<BT: Device> Hart<BT> {
                         self.dbgins(
                             ins,
                             format!("amominu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::min(val, rs2val)
+                    }
+                    _ => return Err(IllegalOpcode(ins)),
+                };
+
+                self.set_register(rd, val.sext());
+                self.bus.write_word(addr, new)?;
+            }
+            R {
+                opcode: 0b0101111,
+                rd,
+                funct3: 0x3,
+                rs1,
+                rs2,
+                funct7,
+            } => {
+                let funct5 = funct7 >> 2;
+                let _aq = (funct7 >> 1) & 0b1;
+                let _rl = funct7 & 0b1;
+
+                let addr = self.get_register(rs1) as usize;
+                let val = self.bus.read_double(addr)?;
+                let rs2val = self.get_register(rs2);
+                let new = match funct5 {
+                    // amoswap.d
+                    0x01 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoswap.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        let rdval = self.get_register(rd);
+                        self.set_register(rs2, rdval);
+                        rs2val
+                    }
+                    // amoadd.d
+                    0x00 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoadd.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+
+                        val.wrapping_add(rs2val)
+                    }
+                    // amoand.d
+                    0x0C => {
+                        self.dbgins(
+                            ins,
+                            format!("amoand.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val & rs2val
+                    }
+                    // amoor.d
+                    0x08 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val | rs2val
+                    }
+                    // amoxor.d
+                    0x04 => {
+                        self.dbgins(
+                            ins,
+                            format!("amoxor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        val ^ rs2val
+                    }
+                    // amomax.d
+                    0x14 => {
+                        self.dbgins(
+                            ins,
+                            format!("amomax.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::max(val as i64, rs2val as i64) as u64
+                    }
+                    // amomin.d
+                    0x10 => {
+                        self.dbgins(
+                            ins,
+                            format!("amomin.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::min(val as i64, rs2val as i64) as u64
+                    }
+                    // amomaxu.d
+                    0x1C => {
+                        self.dbgins(
+                            ins,
+                            format!("amomaxu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        cmp::max(val, rs2val)
+                    }
+                    // amominu.d
+                    0x18 => {
+                        self.dbgins(
+                            ins,
+                            format!("amominu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
                         );
                         cmp::min(val, rs2val)
                     }
