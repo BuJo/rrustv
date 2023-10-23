@@ -43,6 +43,7 @@ flowchart LR
 | HTIF  | Deprecated Host Device              |
 | FESVR | RISC-V Frontend Server              |
 | PLIC  | Platform-Level Interrupt Controller |
+| AMO   | Atomic Memory Operation             |
 
 ## Development
 

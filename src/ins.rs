@@ -497,24 +497,6 @@ impl Instruction {
                             imm: (2 * imm) as i32,
                         }
                     }
-                    // c.jal
-                    0b001 => {
-                        // imm[11|4|9:8|10|6|7|3:1|5]
-                        let imm = (((instruction >> 12) & 0b1) << 15)
-                            | (((instruction >> 11) & 0b1) << 8)
-                            | (((instruction >> 9) & 0b11) << 12)
-                            | (((instruction >> 8) & 0b1) << 14)
-                            | (((instruction >> 7) & 0b1) << 10)
-                            | (((instruction >> 6) & 0b1) << 11)
-                            | (((instruction >> 3) & 0b111) << 5)
-                            | (((instruction >> 2) & 0b1) << 9);
-                        let imm = imm as i16 >> 5;
-                        J {
-                            opcode: 0b1101111,
-                            rd: 0x1,
-                            imm: (2 * imm) as i32,
-                        }
-                    }
                     // c.beqz
                     0b110 => {
                         let rs1 = (instruction >> 7) as u8 & 0b111;
@@ -649,6 +631,21 @@ impl Instruction {
                         //  uimm[5:2|7:6]
                         let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
                             | (((instruction >> 7) as u8 & 0b11) << 6);
+                        S {
+                            opcode: 0b0100011,
+                            funct3: 0x2,
+                            rs1: 0x2, // sp
+                            rs2,
+                            imm: imm as i16,
+                        }
+                    }
+                    // CSS-Type: c.fswsp x4, 0
+                    0b1110 | 0b1111 => {
+                        //  uimm[5:2|7:6]
+                        let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
+                            | (((instruction >> 7) as u8 & 0b11) << 6);
+                        // TODO: this should actually use floating point registers,
+                        //       however, it is needed for c.jalr validation
                         S {
                             opcode: 0b0100011,
                             funct3: 0x2,
