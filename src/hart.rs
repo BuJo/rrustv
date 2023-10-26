@@ -1004,14 +1004,16 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
+                let csr = (imm as u16 & 0xFFF) as usize;
+
                 if rd != 0 {
-                    self.set_register(rd, self.csr[imm as usize]);
+                    self.set_register(rd, self.csr[csr]);
                 }
-                self.csr[imm as usize] = self.get_register(rs1);
+                self.csr[csr] = self.get_register(rs1);
 
                 self.dbgins(
                     ins,
-                    format!("csrrw\t{},{},{}", reg(rd), Csr::name(imm as u64), reg(rs1)),
+                    format!("csrrw\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
                 )
             }
             // csrrs Atomic Read and Set Bits in CSR
@@ -1022,15 +1024,17 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
-                self.set_register(rd, self.csr[imm as usize]);
+                let csr = (imm as u16 & 0xFFF) as usize;
+
+                self.set_register(rd, self.csr[csr]);
 
                 if rs1 != 0 {
-                    self.csr[imm as usize] |= self.get_register(rs1);
+                    self.csr[csr] |= self.get_register(rs1);
                 }
 
                 self.dbgins(
                     ins,
-                    format!("csrrs\t{},{},{}", reg(rd), Csr::name(imm as u64), reg(rs1)),
+                    format!("csrrs\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
                 )
             }
             // csrrc Atomic Read and Clear Bits in CSR
@@ -1041,19 +1045,107 @@ impl<BT: Device> Hart<BT> {
                 rs1,
                 imm,
             } => {
+                let csr = (imm as u16 & 0xFFF) as usize;
                 if rd != 0 {
-                    self.set_register(rd, self.csr[imm as usize]);
+                    self.set_register(rd, self.csr[csr]);
                 }
 
                 if rs1 != 0 {
-                    self.csr[imm as usize] &= !self.get_register(rs1);
+                    self.csr[csr] &= !self.get_register(rs1);
                 }
 
                 self.dbgins(
                     ins,
-                    format!("csrrc\t{},{},{}", reg(rd), Csr::name(imm as u64), reg(rs1)),
+                    format!("csrrc\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
                 )
             }
+            // csrrwi
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x5,
+                rs1,
+                imm,
+            } => {
+                let csr = (imm as u16 & 0xFFF) as usize;
+                let imm = rs1 as u64;
+
+                self.dbgins(
+                    ins,
+                    format!("csrrwi\t{},{},{}", reg(rd), Csr::name(csr), imm),
+                );
+
+                if rd != 0 {
+                    self.set_register(rd, self.csr[csr]);
+                }
+                self.csr[csr] = imm;
+            }
+            // csrrsi
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x6,
+                rs1,
+                imm,
+            } => {
+                let csr = (imm as u16 & 0xFFF) as usize;
+                let imm = rs1 as u64;
+
+                self.dbgins(
+                    ins,
+                    format!("csrrsi\t{},{},{}", reg(rd), Csr::name(csr), imm),
+                );
+
+                self.set_register(rd, self.csr[csr]);
+
+                if rs1 != 0 {
+                    self.csr[csr] |= imm;
+                }
+            }
+            // csrrci
+            I {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x7,
+                rs1,
+                imm,
+            } => {
+                let csr = (imm as u16 & 0xFFF) as usize;
+                let imm = rs1 as u64;
+
+                self.dbgins(
+                    ins,
+                    format!("csrrci\t{},{},{}", reg(rd), Csr::name(csr), imm),
+                );
+
+                if rd != 0 {
+                    self.set_register(rd, self.csr[csr]);
+                }
+
+                if rs1 != 0 {
+                    self.csr[csr] &= !imm;
+                }
+            }
+
+            // Supervisor Memory-Management Instructions
+            // sfence.vma Atomic Read and Clear Bits in CSR
+            R {
+                opcode: 0b1110011,
+                rd,
+                funct3: 0x0,
+                rs1,
+                rs2,
+                ..
+            } => self.dbgins(
+                ins,
+                format!(
+                    "system\t{},{},{} # {:08x}",
+                    reg(rd),
+                    reg(rs1),
+                    reg(rs2),
+                    ins
+                ),
+            ),
 
             // Atomics
             R {

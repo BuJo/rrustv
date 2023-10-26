@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::{Formatter, LowerHex};
 
 use crate::plic::Fault::{self, IllegalOpcode, InstructionDecodingError};
 
@@ -119,6 +120,15 @@ pub enum Instruction {
     CRV32(u16),
 }
 
+impl LowerHex for Instruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Instruction::IRV32(i) => fmt::LowerHex::fmt(&i, f),
+            Instruction::CRV32(i) => fmt::LowerHex::fmt(&i, f),
+        }
+    }
+}
+
 impl Instruction {
     pub fn size(&self) -> usize {
         match self {
@@ -153,7 +163,7 @@ impl Instruction {
                     funct7,
                 }
             }
-            0b0010011 | 0b0000011 | 0b1100111 | 0b1110011 | 0b0001111 | 0b0011011 => {
+            0b0010011 | 0b0000011 | 0b1100111 | 0b0001111 | 0b0011011 => {
                 let rd = ((instruction & 0x0F80) >> 7) as u8;
                 let funct3 = ((instruction & 0x7000) >> 12) as u8;
                 let rs1 = ((instruction & 0xF8000) >> 15) as u8;
@@ -164,6 +174,45 @@ impl Instruction {
                     funct3,
                     rs1,
                     imm,
+                }
+            }
+            0b1110011 => {
+                let rd = ((instruction & 0x0F80) >> 7) as u8;
+                let funct3 = ((instruction & 0x7000) >> 12) as u8;
+                let rs1 = ((instruction & 0xF8000) >> 15) as u8;
+                let imm = ((instruction as i32) >> 20) as i16;
+
+                if 0x12000073 == instruction {
+                    eprintln!("incompat?");
+                }
+
+                // ecall / ebreak / csr*
+                if funct3 == 0x0 && (imm == 0 || imm == 1)
+                    || funct3 == 0x1
+                    || funct3 == 0x2
+                    || funct3 == 0x3
+                    || funct3 == 0x5
+                    || funct3 == 0x6
+                    || funct3 == 0x7
+                {
+                    I {
+                        opcode,
+                        rd,
+                        funct3,
+                        rs1,
+                        imm,
+                    }
+                } else {
+                    let funct7 = (instruction >> 24) as u8;
+                    let rs2 = ((instruction >> 19) & 0b11111) as u8;
+                    R {
+                        opcode,
+                        rd,
+                        funct3,
+                        rs1,
+                        rs2,
+                        funct7,
+                    }
                 }
             }
             0b0100011 => {
@@ -419,7 +468,7 @@ impl Instruction {
                                     rs1: rd + RVC_REG_OFFSET,
                                     imm: imm as i16,
                                 }
-                            },
+                            }
                             // c.srai
                             0b01 => {
                                 // srl -> sra
@@ -443,7 +492,7 @@ impl Instruction {
                                     rs1: rd + RVC_REG_OFFSET,
                                     imm,
                                 }
-                            },
+                            }
                             // CS-Type: c.and/c.or/c.xor/c.sub
                             _ => {
                                 let funct6 = (instruction >> 10) as u8 & 0b111111;

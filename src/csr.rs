@@ -209,7 +209,7 @@ impl IndexMut<usize> for Csr {
 }
 
 impl Csr {
-    pub fn name(id: u64) -> &'static str {
+    pub fn name(id: usize) -> &'static str {
         for (i, s, ..) in CSR_MAP {
             if i == (id as usize) {
                 return s;
