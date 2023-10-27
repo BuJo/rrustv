@@ -47,10 +47,19 @@ flowchart LR
 
 ## Development
 
-```
+```shell
 make -C test
 cargo test
 cargo run
+```
+
+### Verification
+
+```shell
+cd validation
+podman build -t riscvvalidation . -f Dockerfile.riscof
+podman run -it -v $PWD:/work:z -v $PWD/../target:/target riscvvalidation --verbose info arch-tests --clone
+podman run -it -v $PWD:/work:z -v $PWD/../target:/target riscvvalidation
 ```
 
 ## Licensing

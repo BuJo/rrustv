@@ -2,3 +2,5 @@
 /linux*
 /buildroot
 /tinyemu
+validation/riscof_work
+validation/riscv-arch-test
