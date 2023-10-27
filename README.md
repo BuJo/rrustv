@@ -57,7 +57,7 @@ cargo run
 
 ```shell
 cd validation
-podman build -t riscvvalidation . -f Dockerfile.riscof
+podman build -t riscvvalidation .
 podman run -it -v $PWD:/work:z -v $PWD/../target:/target riscvvalidation --verbose info arch-tests --clone
 podman run -it -v $PWD:/work:z -v $PWD/../target:/target riscvvalidation
 ```
