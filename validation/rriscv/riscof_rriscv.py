@@ -1,19 +1,24 @@
-import os
-import re
-import shutil
-import subprocess
-import shlex
 import logging
-import random
-import string
-from string import Template
-import sys
+import os
+import shutil
 
 import riscof.utils as utils
-import riscof.constants as constants
 from riscof.pluginTemplate import pluginTemplate
 
 logger = logging.getLogger()
+
+
+class makeUtil(utils.makeUtil):
+    def add_filetarget(self, command, output, input):
+        with open(self.makefilePath, "a") as makefile:
+            makefile.write("\n\n" + output + " : " + input + " \n\t" + command.replace("\n", "\n\t"))
+
+    def add_phonytarget(self, input, tname=""):
+        if tname == "":
+            tname = "TARGET" + str(len(self.targets))
+        with open(self.makefilePath, "a") as makefile:
+            makefile.write("\n\n.PHONY : " + tname + "\n" + tname + " : " + input + "\n")
+            self.targets.append(tname)
 
 
 class rriscv(pluginTemplate):
@@ -90,9 +95,11 @@ class rriscv(pluginTemplate):
         # will be useful in setting integer value in the compiler string (if not already hardcoded);
         self.xlen = ('64' if 64 in ispec['supported_xlen'] else '32')
 
-        # for rriscv start building the '--isa' argument. the self.isa is dutnmae specific and may not be
+        # for rriscv start building the '--isa' argument. the self.isa is dutname specific and may not be
         # useful for all DUTs
         self.isa = 'rv' + self.xlen
+        if "G" in ispec["ISA"]:
+            self.isa += "IMAFDZicsr_Zifencei"
         if "I" in ispec["ISA"]:
             self.isa += 'i'
         if "M" in ispec["ISA"]:
@@ -104,33 +111,33 @@ class rriscv(pluginTemplate):
         if "C" in ispec["ISA"]:
             self.isa += 'c'
         if "Zicsr" in ispec["ISA"]:
-          self.isa += '_Zicsr'
+            self.isa += '_Zicsr'
         if "Zifencei" in ispec["ISA"]:
-          self.isa += '_Zifencei'
+            self.isa += '_Zifencei'
         if "Zba" in ispec["ISA"]:
-          self.isa += '_Zba'
+            self.isa += '_Zba'
         if "Zbb" in ispec["ISA"]:
-          self.isa += '_Zbb'
+            self.isa += '_Zbb'
         if "Zbc" in ispec["ISA"]:
-          self.isa += '_Zbc'
+            self.isa += '_Zbc'
         if "Zbkb" in ispec["ISA"]:
-          self.isa += '_Zbkb'
+            self.isa += '_Zbkb'
         if "Zbkc" in ispec["ISA"]:
-          self.isa += '_Zbkc'
+            self.isa += '_Zbkc'
         if "Zbkx" in ispec["ISA"]:
-          self.isa += '_Zbkx'
+            self.isa += '_Zbkx'
         if "Zbs" in ispec["ISA"]:
-          self.isa += '_Zbs'
+            self.isa += '_Zbs'
         if "Zknd" in ispec["ISA"]:
-          self.isa += '_Zknd'
+            self.isa += '_Zknd'
         if "Zkne" in ispec["ISA"]:
-          self.isa += '_Zkne'
+            self.isa += '_Zkne'
         if "Zknh" in ispec["ISA"]:
-          self.isa += '_Zknh'
+            self.isa += '_Zknh'
         if "Zksed" in ispec["ISA"]:
-          self.isa += '_Zksed'
+            self.isa += '_Zksed'
         if "Zksh" in ispec["ISA"]:
-          self.isa += '_Zksh'
+            self.isa += '_Zksh'
 
         self.compile_cmd = self.compile_cmd + ' -mabi=' + ('lp64 ' if 64 in ispec['supported_xlen'] else 'ilp32 ')
 
@@ -140,7 +147,7 @@ class rriscv(pluginTemplate):
         if os.path.exists(self.work_dir + "/Makefile." + self.name[:-1]):
             os.remove(self.work_dir + "/Makefile." + self.name[:-1])
         # create an instance the makeUtil class that we will use to create targets.
-        make = utils.makeUtil(makefilePath=os.path.join(self.work_dir, "Makefile." + self.name[:-1]))
+        make = makeUtil(makefilePath=os.path.join(self.work_dir, "Makefile." + self.name[:-1]))
 
         # set the make command that will be used. The num_jobs parameter was set in the __init__
         # function earlier
@@ -161,7 +168,7 @@ class rriscv(pluginTemplate):
             test_dir = testentry['work_dir']
 
             # name of the elf file after compilation of the test
-            elf = 'my.elf'
+            elf_file = os.path.join(test_dir, 'my.elf')
 
             # name of the signature file as per requirement of RISCOF. RISCOF expects the signature to
             # be named as DUT-<dut-name>.signature. The below variable creates an absolute path of
@@ -177,31 +184,32 @@ class rriscv(pluginTemplate):
             if shutil.which(compiler) is None:
                 compiler = "riscv{0}-unknown-linux-gnu-gcc".format(self.xlen)
                 if shutil.which(compiler) is None:
-                    logger.error(compiler+": executable not found. Please check environment setup.")
+                    logger.error(compiler + ": executable not found. Please check environment setup.")
                     raise SystemExit(1)
             # substitute all variables in the compile command that we created in the initialize
             # function
-            cmd = compiler + self.compile_cmd.format(testentry['isa'].lower(), self.xlen, test, elf, compile_macros)
+            cmd = compiler + self.compile_cmd.format(testentry['isa'].lower(), self.xlen, test, elf_file, compile_macros)
+
+            # set up the simulation command. Template is for spike. Please change.
+            simcmd = self.dut_exe + ' {0} {1}'.format(elf_file, sig_file)
+
+            make.add_filetarget(cmd, elf_file, test)
+            make.add_filetarget(simcmd, sig_file, elf_file + ' ' + self.dut_exe)
+
+            # create a target. The makeutil will create a target with the name "TARGET<num>" where num
+            # starts from 0 and increments automatically for each new target that is added
 
             # if the user wants to disable running the tests and only compile the tests, then
             # the "else" clause is executed below assigning the sim command to simple no action
             # echo statement.
             if self.target_run:
-                # set up the simulation command. Template is for spike. Please change.
-                simcmd = self.dut_exe + ' {0} {1}'.format(elf, sig_file)
+                make.add_phonytarget(sig_file)
             else:
-                simcmd = 'echo "NO RUN"'
-
-            # concatenate all commands that need to be executed within a make-target.
-            execute = '@cd {0}; {1}; {2};'.format(testentry['work_dir'], cmd, simcmd)
-
-            # create a target. The makeutil will create a target with the name "TARGET<num>" where num
-            # starts from 0 and increments automatically for each new target that is added
-            make.add_target(execute)
+                make.add_phonytarget(elf_file)
 
         # if you would like to exit the framework once the makefile generation is complete uncomment the
         # following line. Note this will prevent any signature checking or report generation.
-        #raise SystemExit
+        #raise SystemExit(0)
 
         # once the make-targets are done and the makefile has been created, run all the targets in
         # parallel using the make command set above.
