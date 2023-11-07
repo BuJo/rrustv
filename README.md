@@ -1,4 +1,4 @@
-# RISC-V Rust Emulator (RV32I)
+# Rust RISC-V Emulator (RV64IAC)
 
 This project aims to provide a learning platform for RISC-V and Rust.
 
