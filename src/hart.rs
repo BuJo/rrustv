@@ -58,8 +58,8 @@ impl<BT: Device> Hart<BT> {
             .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
 
         // simulate passing of time
-        self.csr[csr::MCYCLE] += 3;
         self.csr[csr::MINSTRET] += 1;
+        self.csr.write(csr::MCYCLE, self.csr.read(csr::MCYCLE) + 3);
 
         res
     }
@@ -87,7 +87,7 @@ impl<BT: Device> Hart<BT> {
             0b11 => {
                 eprintln!(
                     "[{}] [{:#x}] {:07b} Opcode for ins {:08x} {:032b}",
-                    self.csr[csr::MHARTID],
+                    self.csr.read(csr::MHARTID),
                     self.pc,
                     ins & 0b11,
                     ins,
@@ -101,7 +101,7 @@ impl<BT: Device> Hart<BT> {
                 let ins = self.bus.read_half(self.pc)?;
                 eprintln!(
                     "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
-                    self.csr[csr::MHARTID],
+                    self.csr.read(csr::MHARTID),
                     self.pc,
                     ins & 0b11,
                     ins,
@@ -1007,9 +1007,9 @@ impl<BT: Device> Hart<BT> {
                 let csr = (imm as u16 & 0xFFF) as usize;
 
                 if rd != 0 {
-                    self.set_register(rd, self.csr[csr]);
+                    self.set_register(rd, self.csr.read(csr));
                 }
-                self.csr[csr] = self.get_register(rs1);
+                self.csr.write(csr, self.get_register(rs1));
 
                 self.dbgins(
                     ins,
@@ -1026,10 +1026,10 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let csr = (imm as u16 & 0xFFF) as usize;
 
-                self.set_register(rd, self.csr[csr]);
+                self.set_register(rd, self.csr.read(csr));
 
                 if rs1 != 0 {
-                    self.csr[csr] |= self.get_register(rs1);
+                    self.csr.write(csr, self.csr.read(csr) | self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1047,11 +1047,11 @@ impl<BT: Device> Hart<BT> {
             } => {
                 let csr = (imm as u16 & 0xFFF) as usize;
                 if rd != 0 {
-                    self.set_register(rd, self.csr[csr]);
+                    self.set_register(rd, self.csr.read(csr));
                 }
 
                 if rs1 != 0 {
-                    self.csr[csr] &= !self.get_register(rs1);
+                    self.csr.write(csr, self.csr.read(csr) & !self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1076,9 +1076,9 @@ impl<BT: Device> Hart<BT> {
                 );
 
                 if rd != 0 {
-                    self.set_register(rd, self.csr[csr]);
+                    self.set_register(rd, self.csr.read(csr));
                 }
-                self.csr[csr] = imm;
+                self.csr.write(csr, imm);
             }
             // csrrsi
             I {
@@ -1096,10 +1096,10 @@ impl<BT: Device> Hart<BT> {
                     format!("csrrsi\t{},{},{}", reg(rd), Csr::name(csr), imm),
                 );
 
-                self.set_register(rd, self.csr[csr]);
+                self.set_register(rd, self.csr.read(csr));
 
                 if rs1 != 0 {
-                    self.csr[csr] |= imm;
+                    self.csr.write(csr, self.csr.read(csr) | imm);
                 }
             }
             // csrrci
@@ -1119,11 +1119,11 @@ impl<BT: Device> Hart<BT> {
                 );
 
                 if rd != 0 {
-                    self.set_register(rd, self.csr[csr]);
+                    self.set_register(rd, self.csr.read(csr));
                 }
 
                 if rs1 != 0 {
-                    self.csr[csr] &= !imm;
+                    self.csr.write(csr, self.csr.read(csr) & !imm);
                 }
             }
 
@@ -1346,7 +1346,7 @@ impl<BT: Device> Hart<BT> {
             _ => {
                 eprintln!(
                     "[{}] Unknown instruction: {:}",
-                    self.csr[csr::MHARTID],
+                    self.csr.read(csr::MHARTID),
                     instruction
                 );
                 return Err(Fault::MemoryFault(self.pc));
