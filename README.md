@@ -44,6 +44,7 @@ flowchart LR
 | FESVR | RISC-V Frontend Server              |
 | PLIC  | Platform-Level Interrupt Controller |
 | AMO   | Atomic Memory Operation             |
+| RSP   | GDB Remote Serial Protocol          |
 
 ## Development
 
