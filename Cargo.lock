@@ -66,6 +66,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdbstub_arch"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eecb536c55c43593a00dde9074dbbdb0e81ce5f20dbca921400f8779c21dea9c"
+dependencies = [
+ "gdbstub",
+ "num-traits",
+]
+
+[[package]]
 name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -141,6 +151,7 @@ name = "rriscv"
 version = "0.1.0"
 dependencies = [
  "gdbstub",
+ "gdbstub_arch",
  "object",
 ]
 
