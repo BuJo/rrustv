@@ -58,7 +58,6 @@ impl<BT: Device> Hart<BT> {
             .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
 
         // simulate passing of time
-        self.csr[csr::MINSTRET] += 1;
         self.csr.write(csr::MCYCLE, self.csr.read(csr::MCYCLE) + 3);
 
         res
@@ -981,6 +980,9 @@ impl<BT: Device> Hart<BT> {
 
                 // For now, ignore SEE errors
                 let _ = see::call(self);
+
+                // ecall causes synchronous exception
+                return Ok(());
             }
             // ebreak Environment Break
             I {
@@ -989,10 +991,12 @@ impl<BT: Device> Hart<BT> {
                 imm: 0x1,
                 ..
             } => {
-                // Stop the hart, the Execution Environment has to take over
-                self.stop = true;
+                see::ebreak();
 
-                self.dbgins(ins, "ebreak".to_string())
+                self.dbgins(ins, "ebreak".to_string());
+
+                // ebreak causes synchronous exception
+                return Ok(());
             }
 
             // RV32/RV64 Zicsr
@@ -1352,6 +1356,13 @@ impl<BT: Device> Hart<BT> {
                 return Err(Fault::MemoryFault(self.pc));
             }
         };
+
+        // Retire Instruction
+        // Note that synchronous exceptions (like ebreak/ecall) do not increase the count of
+        // retired instructions.  This means, any time an instruction needs to skip the `minstret`
+        // increase, it should do an early return in the match expression.
+        self.csr.write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
+
         Ok(())
     }
 

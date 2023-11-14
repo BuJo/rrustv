@@ -16,6 +16,7 @@ sed -i 's/csrrs\(.*\),zero$/csrr\1/' $dut
 sed -i 's/csrrw\tzero,\(.*\)$/csrw\t\1/' $dut
 sed -i 's/xor\(.*\),-1 /not\1 /' $dut
 sed -i '/Opcode for ins/d' $dut
+sed -i '/csr minstret\|csr mcycle\|csr mhartid/d' $dut
 
 sed -i 's/ <.*$//' $ref
 sed -i '/^80......$/d' $ref

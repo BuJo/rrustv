@@ -228,3 +228,8 @@ pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Fault> {
         call_0_2(hart).map(|_x| ()).map_err(|_x| Unimplemented)
     }
 }
+
+pub(crate) fn ebreak() {
+    // XXX: Ignore for now - we may decide to open a port used for GDB Remote Serial Protocol
+    //      communication.
+}
