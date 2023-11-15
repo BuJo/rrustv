@@ -215,7 +215,12 @@ impl Csr {
     }
 
     pub(crate) fn write(&mut self, csr: usize, val: u64) {
-        eprintln!("w csr {}[{:x}]->[{:x}]", Csr::name(csr), self.csrs[csr], val);
+        eprintln!(
+            "w csr {}[{:x}]->[{:x}]",
+            Csr::name(csr),
+            self.csrs[csr],
+            val
+        );
 
         for (i, _s, _r, w) in CSR_MAP {
             if i == csr {

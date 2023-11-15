@@ -63,6 +63,17 @@ impl<BT: Device> Hart<BT> {
         res
     }
 
+    pub fn get_pc(&self) -> usize {
+        self.pc
+    }
+    pub fn set_pc(&mut self, pc: usize) {
+        self.pc = pc;
+    }
+
+    pub fn get_csr(&self, csr: usize) -> u64 {
+        self.csr.read(csr)
+    }
+
     pub fn set_register(&mut self, reg: u8, val: u64) {
         match reg {
             0 => {}
@@ -1033,7 +1044,8 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, self.csr.read(csr));
 
                 if rs1 != 0 {
-                    self.csr.write(csr, self.csr.read(csr) | self.get_register(rs1));
+                    self.csr
+                        .write(csr, self.csr.read(csr) | self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1055,7 +1067,8 @@ impl<BT: Device> Hart<BT> {
                 }
 
                 if rs1 != 0 {
-                    self.csr.write(csr, self.csr.read(csr) & !self.get_register(rs1));
+                    self.csr
+                        .write(csr, self.csr.read(csr) & !self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1361,7 +1374,8 @@ impl<BT: Device> Hart<BT> {
         // Note that synchronous exceptions (like ebreak/ecall) do not increase the count of
         // retired instructions.  This means, any time an instruction needs to skip the `minstret`
         // increase, it should do an early return in the match expression.
-        self.csr.write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
+        self.csr
+            .write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
 
         Ok(())
     }

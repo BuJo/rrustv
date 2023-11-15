@@ -30,6 +30,19 @@ impl DynBus {
 
         devices.push((range, Box::new(device)));
     }
+
+    pub fn read(&self, addr: usize, data: &mut [u8]) -> Result<(), Fault> {
+        for i in 0..data.len() {
+            data[i] = self.read_byte(addr + i)?
+        }
+        Ok(())
+    }
+    pub fn write(&self, addr: usize, data: &[u8]) -> Result<(), Fault> {
+        for i in 0..data.len() {
+            self.write_byte(addr + i, data[i])?
+        }
+        Ok(())
+    }
 }
 
 impl Default for DynBus {
