@@ -106,6 +106,8 @@ fn wait_for_tcp(port: u16) -> Result<TcpStream, Box<dyn std::error::Error>> {
 struct Emulator {
     bus: Arc<DynBus>,
     hart: Hart<DynBus>,
+
+    breakpoints: Vec<usize>,
 }
 
 impl Emulator {
@@ -274,6 +276,9 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         kind: <Self::Arch as Arch>::BreakpointKind,
     ) -> TargetResult<bool, Self> {
         eprintln!("adding breakpoint on {:x}({})", addr, kind);
+
+        self.breakpoints.push(addr as usize);
+
         Ok(true)
     }
 
@@ -282,7 +287,10 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         addr: <Self::Arch as Arch>::Usize,
         kind: <Self::Arch as Arch>::BreakpointKind,
     ) -> TargetResult<bool, Self> {
-        eprintln!("adding breakpoint on {:x}({})", addr, kind);
+        eprintln!("removing breakpoint on {:x}({})", addr, kind);
+
+        self.breakpoints.retain(|bp| *bp != addr as usize);
+
         Ok(true)
     }
 }
