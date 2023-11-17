@@ -89,6 +89,10 @@ impl<BT: Device> Hart<BT> {
         }
     }
 
+    pub fn get_registers(&self) -> [u64; 32] {
+        self.registers
+    }
+
     fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
         // Assuming little-endian, the first byte contains the opcode
         let ins = self.bus.read_word(self.pc)?;

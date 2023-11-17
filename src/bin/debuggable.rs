@@ -1,7 +1,9 @@
 use std::net::{TcpListener, TcpStream};
 use std::ops::Range;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::{env, fs};
+use std::{env, fs, thread};
 
 use gdbstub::arch::Arch;
 use gdbstub::common::Tid;
@@ -13,12 +15,22 @@ use gdbstub::target::ext::base::BaseOps;
 use gdbstub::target::ext::base::BaseOps::MultiThread;
 use gdbstub::target::TargetResult;
 use object::{Object, ObjectSection};
-use rriscv::csr::MHARTID;
 
 use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
+use rriscv::plic::Fault;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
+
+enum EmulationCommand {
+    AddBreakpoint(usize),
+    RemoveBreakpoint(usize),
+    ReadRegisters(Sender<Vec<u64>>),
+    SetRegisters(Vec<u64>),
+    ReadMemory(Sender<Vec<u8>>, usize, usize),
+    WriteMemory(usize, Vec<u8>),
+    Resume,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -38,6 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct Debugger<'a> {
     emu: &'a mut Emulator,
 }
+
 impl<'a> Debugger<'a> {
     fn new(emu: &'a mut Emulator) -> Self {
         Self { emu }
@@ -105,9 +118,7 @@ fn wait_for_tcp(port: u16) -> Result<TcpStream, Box<dyn std::error::Error>> {
 
 struct Emulator {
     bus: Arc<DynBus>,
-    hart: Hart<DynBus>,
-
-    breakpoints: Vec<usize>,
+    sender: Sender<EmulationCommand>,
 }
 
 impl Emulator {
@@ -135,14 +146,58 @@ impl Emulator {
 
         hart.set_register(treg("sp"), (pc + 0x100000) as u64);
 
-        Self { bus, hart }
+        let (sender, receiver) = mpsc::channel();
+
+        thread::spawn(move || {
+            Emulator::run_hart(hart, receiver);
+        });
+
+        Self { bus, sender }
     }
 
-    fn run(&mut self) {
+    fn run_hart(mut hart: Hart<DynBus>, receiver: Receiver<EmulationCommand>) {
         let mut i = 0;
 
+        let mut breakpoints = Vec::new();
+
         loop {
-            match self.hart.tick() {
+            match receiver.recv() {
+                Ok(cmd) => match cmd {
+                    EmulationCommand::AddBreakpoint(addr) => {
+                        breakpoints.push(addr);
+                    }
+                    EmulationCommand::RemoveBreakpoint(addr) => {
+                        breakpoints.retain(|bp| *bp != addr)
+                    }
+                    EmulationCommand::ReadMemory(sender, addr, len) => {}
+                    EmulationCommand::WriteMemory(addr, data) => {}
+                    EmulationCommand::Resume => {}
+                    EmulationCommand::ReadRegisters(sender) => {
+                        let mut registers = vec![hart.get_pc() as u64];
+                        registers.extend_from_slice(&hart.get_registers());
+                        sender.send(registers).expect("disco");
+                    }
+                    EmulationCommand::SetRegisters(regs) => {
+                        hart.set_pc(regs[0] as usize);
+                        for i in 0..=31 {
+                            hart.set_register(i, regs[(i + 1) as usize]);
+                        }
+                    }
+                }, /*
+                Err(e) => match e {
+                TryRecvError::Empty => {}
+                TryRecvError::Disconnected => eprintln!("failed receiving cmd: {}", e),
+                }*/
+                Err(e) => eprintln!("failed receiving cmd: {}", e),
+            }
+
+            if let Some(bp) = breakpoints.iter().find(|x| **x == hart.get_pc()) {
+                // breakpoint found, stopping execution
+                eprintln!("breakpoint found: {:x}", bp);
+                continue;
+            };
+
+            match hart.tick() {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("exited at: {} ({:?})", i, e);
@@ -156,7 +211,7 @@ impl Emulator {
 
 impl target::Target for Emulator {
     type Arch = gdbstub_arch::riscv::Riscv64;
-    type Error = ();
+    type Error = Fault;
 
     fn base_ops(&mut self) -> BaseOps<'_, Self::Arch, Self::Error> {
         MultiThread(self)
@@ -175,9 +230,14 @@ impl target::ext::base::multithread::MultiThreadBase for Emulator {
         regs: &mut <Self::Arch as Arch>::Registers,
         tid: Tid,
     ) -> TargetResult<(), Self> {
-        regs.pc = self.hart.get_pc() as u64;
+        let (sender, receiver) = mpsc::channel();
+        self.sender
+            .send(EmulationCommand::ReadRegisters(sender))
+            .expect("disco");
+        let registers = receiver.recv().expect("disco");
+        regs.pc = registers[0];
         for i in 0..=31 {
-            regs.x[i] = self.hart.get_register(i as u8);
+            regs.x[i] = registers[i + 1];
         }
 
         eprintln!("reading registers from tid:{} regs: {:?}", tid, regs);
@@ -189,10 +249,11 @@ impl target::ext::base::multithread::MultiThreadBase for Emulator {
         regs: &<Self::Arch as Arch>::Registers,
         tid: Tid,
     ) -> TargetResult<(), Self> {
-        self.hart.set_pc(regs.pc as usize);
-        for i in 0..=31 {
-            self.hart.set_register(i, regs.x[i as usize]);
-        }
+        let mut registers = vec![regs.pc];
+        registers.extend_from_slice(&regs.x);
+        self.sender
+            .send(EmulationCommand::SetRegisters(registers))
+            .expect("disco");
 
         eprintln!("writing registers to tid:{} regs: {:?}", tid, regs);
         Ok(())
@@ -204,7 +265,7 @@ impl target::ext::base::multithread::MultiThreadBase for Emulator {
         data: &mut [u8],
         tid: Tid,
     ) -> TargetResult<(), Self> {
-        self.bus.read(start_addr as usize, data).expect("asdf");
+        self.bus.read(start_addr as usize, data).unwrap_or_default();
 
         eprintln!("reading from tid:{} addr {:x}: {:?}", tid, start_addr, data);
         Ok(())
@@ -226,10 +287,8 @@ impl target::ext::base::multithread::MultiThreadBase for Emulator {
         &mut self,
         thread_is_active: &mut dyn FnMut(Tid),
     ) -> Result<(), Self::Error> {
-        let hartid = self.hart.get_csr(MHARTID) as usize;
-
-        eprintln!("registering active thread: {}", hartid + 1);
-        thread_is_active(Tid::new(hartid + 1).unwrap());
+        eprintln!("registering active thread: {}", 1);
+        thread_is_active(Tid::new(1).unwrap());
         Ok(())
     }
 
@@ -243,6 +302,7 @@ impl target::ext::base::multithread::MultiThreadBase for Emulator {
 impl target::ext::base::multithread::MultiThreadResume for Emulator {
     fn resume(&mut self) -> Result<(), Self::Error> {
         eprintln!("> resume");
+        self.sender.send(EmulationCommand::Resume).expect("disco");
         Ok(())
     }
 
@@ -277,7 +337,9 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
     ) -> TargetResult<bool, Self> {
         eprintln!("adding breakpoint on {:x}({})", addr, kind);
 
-        self.breakpoints.push(addr as usize);
+        self.sender
+            .send(EmulationCommand::AddBreakpoint(addr as usize))
+            .expect("disco");
 
         Ok(true)
     }
@@ -289,7 +351,9 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
     ) -> TargetResult<bool, Self> {
         eprintln!("removing breakpoint on {:x}({})", addr, kind);
 
-        self.breakpoints.retain(|bp| *bp != addr as usize);
+        self.sender
+            .send(EmulationCommand::RemoveBreakpoint(addr as usize))
+            .expect("disco");
 
         Ok(true)
     }
