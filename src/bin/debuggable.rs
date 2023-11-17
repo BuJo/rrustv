@@ -1,7 +1,7 @@
 use std::net::{TcpListener, TcpStream};
 use std::ops::Range;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::Arc;
 use std::{env, fs, thread};
 
@@ -30,6 +30,14 @@ enum EmulationCommand {
     ReadMemory(Sender<Vec<u8>>, usize, usize),
     WriteMemory(usize, Vec<u8>),
     Resume,
+    SetResumeAction(ExecutionMode),
+    ClearResumeAction,
+}
+
+enum ExecutionMode {
+    Continue,
+    Halt,
+    Step,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -59,7 +67,9 @@ impl<'a> Debugger<'a> {
     fn run(&mut self, conn: TcpStream) {
         let gdb = GdbStub::new(conn);
 
-        let mut gdb = gdb.run_state_machine(self.emu).expect("ok");
+        let mut gdb = gdb
+            .run_state_machine(self.emu)
+            .expect("Emulator implemented incorrectly");
         let res = loop {
             gdb = match gdb {
                 GdbStubStateMachine::Idle(mut gdb) => {
@@ -156,55 +166,84 @@ impl Emulator {
     }
 
     fn run_hart(mut hart: Hart<DynBus>, receiver: Receiver<EmulationCommand>) {
-        let mut i = 0;
-
         let mut breakpoints = Vec::new();
+        let mut mode = ExecutionMode::Halt;
 
         loop {
-            match receiver.recv() {
-                Ok(cmd) => match cmd {
-                    EmulationCommand::AddBreakpoint(addr) => {
-                        breakpoints.push(addr);
-                    }
-                    EmulationCommand::RemoveBreakpoint(addr) => {
-                        breakpoints.retain(|bp| *bp != addr)
-                    }
-                    EmulationCommand::ReadMemory(sender, addr, len) => {}
-                    EmulationCommand::WriteMemory(addr, data) => {}
-                    EmulationCommand::Resume => {}
-                    EmulationCommand::ReadRegisters(sender) => {
-                        let mut registers = vec![hart.get_pc() as u64];
-                        registers.extend_from_slice(&hart.get_registers());
-                        sender.send(registers).expect("disco");
-                    }
-                    EmulationCommand::SetRegisters(regs) => {
-                        hart.set_pc(regs[0] as usize);
-                        for i in 0..=31 {
-                            hart.set_register(i, regs[(i + 1) as usize]);
-                        }
-                    }
-                }, /*
-                Err(e) => match e {
-                TryRecvError::Empty => {}
-                TryRecvError::Disconnected => eprintln!("failed receiving cmd: {}", e),
-                }*/
-                Err(e) => eprintln!("failed receiving cmd: {}", e),
+            match mode {
+                ExecutionMode::Continue | ExecutionMode::Step => Emulator::handle_cmd(
+                    &mut hart,
+                    &mut breakpoints,
+                    &mut mode,
+                    receiver.try_recv(),
+                ),
+                ExecutionMode::Halt => Emulator::handle_cmd(
+                    &mut hart,
+                    &mut breakpoints,
+                    &mut mode,
+                    receiver.recv().map_err(|e| TryRecvError::Disconnected),
+                ),
             }
 
             if let Some(bp) = breakpoints.iter().find(|x| **x == hart.get_pc()) {
                 // breakpoint found, stopping execution
                 eprintln!("breakpoint found: {:x}", bp);
-                continue;
+                mode = ExecutionMode::Halt;
             };
+
+            match mode {
+                ExecutionMode::Continue => {}
+                ExecutionMode::Halt => continue,
+                ExecutionMode::Step => mode = ExecutionMode::Halt,
+            }
 
             match hart.tick() {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("exited at: {} ({:?})", i, e);
+                    eprintln!("exited at: {:?}", e);
                     break;
                 }
             }
-            i += 1;
+        }
+    }
+
+    fn handle_cmd(
+        hart: &mut Hart<DynBus>,
+        breakpoints: &mut Vec<usize>,
+        mode: &mut ExecutionMode,
+        cmd: Result<EmulationCommand, TryRecvError>,
+    ) {
+        match cmd {
+            Ok(cmd) => match cmd {
+                EmulationCommand::AddBreakpoint(addr) => {
+                    breakpoints.push(addr);
+                }
+                EmulationCommand::RemoveBreakpoint(addr) => breakpoints.retain(|bp| *bp != addr),
+                EmulationCommand::ReadMemory(sender, addr, len) => {}
+                EmulationCommand::WriteMemory(addr, data) => {}
+                EmulationCommand::Resume => {}
+                EmulationCommand::ReadRegisters(sender) => {
+                    let mut registers = vec![hart.get_pc() as u64];
+                    registers.extend_from_slice(&hart.get_registers());
+                    sender.send(registers).expect("disco");
+                }
+                EmulationCommand::SetRegisters(regs) => {
+                    hart.set_pc(regs[0] as usize);
+                    for i in 0..=31 {
+                        hart.set_register(i, regs[(i + 1) as usize]);
+                    }
+                }
+                EmulationCommand::SetResumeAction(m) => {
+                    *mode = m;
+                }
+                EmulationCommand::ClearResumeAction => {
+                    *mode = ExecutionMode::Continue;
+                }
+            },
+            Err(e) => match e {
+                TryRecvError::Empty => {}
+                TryRecvError::Disconnected => eprintln!("failed receiving cmd: {}", e),
+            },
         }
     }
 }
@@ -308,15 +347,26 @@ impl target::ext::base::multithread::MultiThreadResume for Emulator {
 
     fn clear_resume_actions(&mut self) -> Result<(), Self::Error> {
         eprintln!("> clear_resume_actions");
+        self.sender
+            .send(EmulationCommand::ClearResumeAction)
+            .expect("disco");
         Ok(())
     }
 
     fn set_resume_action_continue(
         &mut self,
         _tid: Tid,
-        _signal: Option<gdbstub::common::Signal>,
+        signal: Option<gdbstub::common::Signal>,
     ) -> Result<(), Self::Error> {
+        if signal.is_some() {
+            // No support for resuming via signals
+            return Err(Fault::Unimplemented);
+        }
+
         eprintln!("> set_resume_action_continue");
+        self.sender
+            .send(EmulationCommand::SetResumeAction(ExecutionMode::Continue))
+            .expect("disco");
         Ok(())
     }
 }
