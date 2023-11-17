@@ -3,6 +3,7 @@ pub mod csr;
 pub mod device;
 pub mod dt;
 pub mod dynbus;
+pub mod gdb;
 pub mod hart;
 pub mod htif;
 pub mod ins;

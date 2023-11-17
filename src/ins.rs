@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fmt::{Formatter, LowerHex};
 
 use crate::plic::Fault::{self, IllegalOpcode, InstructionDecodingError};
 
@@ -120,8 +119,8 @@ pub enum Instruction {
     CRV32(u16),
 }
 
-impl LowerHex for Instruction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::LowerHex for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::IRV32(i) => fmt::LowerHex::fmt(&i, f),
             Instruction::CRV32(i) => fmt::LowerHex::fmt(&i, f),
