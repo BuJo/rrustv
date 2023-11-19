@@ -3,6 +3,7 @@ use crate::hart::Hart;
 use crate::plic::Fault;
 use crate::ram::Ram;
 use crate::reg::treg;
+use crate::rtc::Rtc;
 use gdbstub::arch::Arch;
 use gdbstub::common::Tid;
 use gdbstub::target;
@@ -63,6 +64,16 @@ impl Emulator {
 
         hart.set_register(treg("sp"), (pc + 0x100000) as u64);
 
+        let (sender, receiver) = mpsc::channel();
+
+        thread::spawn(move || {
+            Emulator::run_hart(hart, receiver);
+        });
+
+        Self { bus, sender }
+    }
+
+    pub fn new_plain(hart: Hart<DynBus>, bus: Arc<DynBus>) -> Emulator {
         let (sender, receiver) = mpsc::channel();
 
         thread::spawn(move || {
@@ -284,6 +295,12 @@ impl target::ext::breakpoints::Breakpoints for Emulator {
     ) -> Option<target::ext::breakpoints::SwBreakpointOps<'_, Self>> {
         Some(self)
     }
+
+    fn support_hw_breakpoint(
+        &mut self,
+    ) -> Option<target::ext::breakpoints::HwBreakpointOps<'_, Self>> {
+        Some(self)
+    }
 }
 
 impl target::ext::breakpoints::SwBreakpoint for Emulator {
@@ -292,7 +309,7 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         addr: <Self::Arch as Arch>::Usize,
         kind: <Self::Arch as Arch>::BreakpointKind,
     ) -> TargetResult<bool, Self> {
-        eprintln!("adding breakpoint on {:x}({})", addr, kind);
+        eprintln!("adding software breakpoint on {:x}({})", addr, kind);
 
         self.sender
             .send(EmulationCommand::AddBreakpoint(addr as usize))
@@ -306,7 +323,40 @@ impl target::ext::breakpoints::SwBreakpoint for Emulator {
         addr: <Self::Arch as Arch>::Usize,
         kind: <Self::Arch as Arch>::BreakpointKind,
     ) -> TargetResult<bool, Self> {
-        eprintln!("removing breakpoint on {:x}({})", addr, kind);
+        eprintln!("removing software breakpoint on {:x}({})", addr, kind);
+
+        self.sender
+            .send(EmulationCommand::RemoveBreakpoint(addr as usize))
+            .expect("disco");
+
+        Ok(true)
+    }
+}
+
+impl target::ext::breakpoints::HwBreakpoint for Emulator {
+    fn add_hw_breakpoint(
+        &mut self,
+        addr: <Self::Arch as Arch>::Usize,
+        kind: <Self::Arch as Arch>::BreakpointKind,
+    ) -> TargetResult<bool, Self> {
+        eprintln!("adding hardware breakpoint on {:x}({})", addr, kind);
+
+        self.sender
+            .send(EmulationCommand::AddBreakpoint(addr as usize))
+            .expect("disco");
+
+        Ok(true)
+    }
+
+    fn remove_hw_breakpoint(
+        &mut self,
+        addr: <Self::Arch as Arch>::Usize,
+        kind: <Self::Arch as Arch>::BreakpointKind,
+    ) -> TargetResult<bool, Self> {
+        eprintln!(
+            "removing hardware breakpoitarget remote localhost:9001nt on {:x}({})",
+            addr, kind
+        );
 
         self.sender
             .send(EmulationCommand::RemoveBreakpoint(addr as usize))
