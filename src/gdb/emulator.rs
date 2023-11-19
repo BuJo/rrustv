@@ -1,3 +1,4 @@
+use std::net::TcpStream;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
 use crate::plic::Fault;
@@ -14,6 +15,10 @@ use std::ops::Range;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{mpsc, Arc};
 use std::thread;
+use gdbstub::conn::{Connection, ConnectionExt};
+use gdbstub::stub::{MultiThreadStopReason, run_blocking};
+use gdbstub::stub::run_blocking::Event;
+use crate::csr;
 
 enum EmulationCommand {
     AddBreakpoint(usize),
@@ -31,11 +36,14 @@ enum ExecutionMode {
     Continue,
     Halt,
     Step,
+    Pause,
 }
 
 pub struct Emulator {
     bus: Arc<DynBus>,
     sender: Sender<EmulationCommand>,
+    state_receiver: Receiver<Event<MultiThreadStopReason<u64>>>,
+    byte_sender: Sender<Event<MultiThreadStopReason<u64>>>,
 }
 
 impl Emulator {
@@ -63,18 +71,22 @@ impl Emulator {
 
         hart.set_register(treg("sp"), (pc + 0x100000) as u64);
 
+        let (state_sender, state_receiver) = mpsc::channel();
         let (sender, receiver) = mpsc::channel();
 
+
+        let byte_sender = state_sender.clone();
         thread::spawn(move || {
-            Emulator::run_hart(hart, receiver);
+            Emulator::run_hart(hart, receiver, state_sender);
         });
 
-        Self { bus, sender }
+        Self { bus, sender, state_receiver, byte_sender }
     }
 
-    fn run_hart(mut hart: Hart<DynBus>, receiver: Receiver<EmulationCommand>) {
+    fn run_hart(mut hart: Hart<DynBus>, receiver: Receiver<EmulationCommand>, state_sender: Sender<Event<MultiThreadStopReason<u64>>>) {
+        let tid = Tid::new(hart.get_csr(csr::MHARTID) as usize + 1).unwrap();
         let mut breakpoints = Vec::new();
-        let mut mode = ExecutionMode::Halt;
+        let mut mode = ExecutionMode::Pause; // start harts paused
 
         loop {
             match mode {
@@ -84,34 +96,51 @@ impl Emulator {
                     &mut mode,
                     receiver.try_recv(),
                 ),
-                ExecutionMode::Halt => Emulator::handle_cmd(
+                ExecutionMode::Pause => Emulator::handle_cmd(
                     &mut hart,
                     &mut breakpoints,
                     &mut mode,
                     receiver.recv().map_err(|_e| TryRecvError::Disconnected),
                 ),
+                ExecutionMode::Halt => {},
             }
 
             if let Some(bp) = breakpoints.iter().find(|x| **x == hart.get_pc()) {
                 // breakpoint found, stopping execution
                 eprintln!("breakpoint found: {:x}", bp);
-                mode = ExecutionMode::Halt;
+                state_sender.send(Event::TargetStopped(MultiThreadStopReason::SwBreak(tid))).expect("disco");
+                mode = ExecutionMode::Pause;
             };
 
             match mode {
                 ExecutionMode::Continue => {}
-                ExecutionMode::Halt => continue,
-                ExecutionMode::Step => mode = ExecutionMode::Halt,
+                ExecutionMode::Halt => {
+                    state_sender.send(Event::TargetStopped(MultiThreadStopReason::Exited(0))).expect("disco");
+                },
+                ExecutionMode::Pause => continue,
+                ExecutionMode::Step => mode = ExecutionMode::Pause,
             }
 
             match hart.tick() {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("exited at: {:?}", e);
+                    state_sender.send(Event::TargetStopped(MultiThreadStopReason::Exited(1))).expect("disco");
                     break;
                 }
             }
         }
+    }
+
+    fn run_debugreader(&self, conn: &mut TcpStream) {
+        thread::spawn(move || {
+            loop {
+                let byte = conn
+                    .read()
+                    .map_err(run_blocking::WaitForStopReasonError::Connection)?;
+                self.byte_sender.send(Event::IncomingData(byte)).expect("disco");
+            }
+        });
     }
 
     fn handle_cmd(
@@ -154,6 +183,22 @@ impl Emulator {
         }
     }
 }
+
+// Implements interface used by runner
+impl Emulator {
+    pub(crate) fn stop_in_response_to_ctrl_c_interrupt(&self) -> Result<(), Fault> {
+        self.sender.send(EmulationCommand::SetResumeAction(ExecutionMode::Pause)).expect("disco");
+        Ok(())
+    }
+
+    pub(crate) fn read_stop_event(&self) -> Event<MultiThreadStopReason<u64>> {
+        match self.state_receiver.recv() {
+            Ok(o) => o,
+            Err(e) => {}
+        }
+    }
+}
+
 
 impl target::Target for Emulator {
     type Arch = gdbstub_arch::riscv::Riscv64;
