@@ -102,7 +102,7 @@ limitations under the License.
 * [OpenHW Group CV32E40S User Manual](https://docs.openhwgroup.org/projects/cv32e40s-user-manual/en/latest/index.html)
 * [rustsbi](https://docs.rs/rustsbi/latest/rustsbi/)
 * [emuriscv](https://github.com/jborza/emuriscv)
-* [Linux Kernel RISC-V architecture](https://docs.kernel.org/riscv/index.html)
+* [Linux Kernel RISC-V architecture](https://docs.kernel.org/arch/riscv/index.html)
 
 ### Misc
 
