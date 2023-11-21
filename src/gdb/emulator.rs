@@ -1,26 +1,24 @@
-use std::net::TcpStream;
+use std::ops::Range;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::{mpsc, Arc};
+use std::thread;
+
+use gdbstub::common::Tid;
+use gdbstub::stub::run_blocking::Event;
+use gdbstub::stub::MultiThreadStopReason;
+use gdbstub::target;
+use gdbstub::target::ext::base::BaseOps;
+use gdbstub::target::ext::base::BaseOps::MultiThread;
+use object::{Object, ObjectSection};
+
+use crate::csr;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
 use crate::plic::Fault;
 use crate::ram::Ram;
 use crate::reg::treg;
-use gdbstub::arch::Arch;
-use gdbstub::common::Tid;
-use gdbstub::target;
-use gdbstub::target::ext::base::BaseOps;
-use gdbstub::target::ext::base::BaseOps::MultiThread;
-use gdbstub::target::TargetResult;
-use object::{Object, ObjectSection};
-use std::ops::Range;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{mpsc, Arc};
-use std::thread;
-use gdbstub::conn::{Connection, ConnectionExt};
-use gdbstub::stub::{MultiThreadStopReason, run_blocking};
-use gdbstub::stub::run_blocking::Event;
-use crate::csr;
 
-enum EmulationCommand {
+pub(crate) enum EmulationCommand {
     AddBreakpoint(usize),
     RemoveBreakpoint(usize),
     ReadRegisters(Sender<Vec<u64>>),
@@ -32,7 +30,7 @@ enum EmulationCommand {
     ClearResumeAction,
 }
 
-enum ExecutionMode {
+pub(crate) enum ExecutionMode {
     Continue,
     Halt,
     Step,
@@ -40,8 +38,8 @@ enum ExecutionMode {
 }
 
 pub struct Emulator {
-    bus: Arc<DynBus>,
-    sender: Sender<EmulationCommand>,
+    pub(crate) bus: Arc<DynBus>,
+    pub(crate) sender: Sender<EmulationCommand>,
     state_receiver: Receiver<Event<MultiThreadStopReason<u64>>>,
     byte_sender: Sender<Event<MultiThreadStopReason<u64>>>,
 }
@@ -74,16 +72,41 @@ impl Emulator {
         let (state_sender, state_receiver) = mpsc::channel();
         let (sender, receiver) = mpsc::channel();
 
+        let byte_sender = state_sender.clone();
+        thread::spawn(move || {
+            Emulator::run_hart(hart, receiver, state_sender);
+        });
+
+        Self {
+            bus,
+            sender,
+            state_receiver,
+            byte_sender,
+        }
+    }
+
+    pub fn new_plain(hart: Hart<DynBus>, bus: Arc<DynBus>) -> Emulator {
+        let (state_sender, state_receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel();
 
         let byte_sender = state_sender.clone();
         thread::spawn(move || {
             Emulator::run_hart(hart, receiver, state_sender);
         });
 
-        Self { bus, sender, state_receiver, byte_sender }
+        Self {
+            bus,
+            sender,
+            state_receiver,
+            byte_sender,
+        }
     }
 
-    fn run_hart(mut hart: Hart<DynBus>, receiver: Receiver<EmulationCommand>, state_sender: Sender<Event<MultiThreadStopReason<u64>>>) {
+    fn run_hart(
+        mut hart: Hart<DynBus>,
+        receiver: Receiver<EmulationCommand>,
+        state_sender: Sender<Event<MultiThreadStopReason<u64>>>,
+    ) {
         let tid = Tid::new(hart.get_csr(csr::MHARTID) as usize + 1).unwrap();
         let mut breakpoints = Vec::new();
         let mut mode = ExecutionMode::Pause; // start harts paused
@@ -102,21 +125,25 @@ impl Emulator {
                     &mut mode,
                     receiver.recv().map_err(|_e| TryRecvError::Disconnected),
                 ),
-                ExecutionMode::Halt => {},
+                ExecutionMode::Halt => {}
             }
 
             if let Some(bp) = breakpoints.iter().find(|x| **x == hart.get_pc()) {
                 // breakpoint found, stopping execution
                 eprintln!("breakpoint found: {:x}", bp);
-                state_sender.send(Event::TargetStopped(MultiThreadStopReason::SwBreak(tid))).expect("disco");
+                state_sender
+                    .send(Event::TargetStopped(MultiThreadStopReason::SwBreak(tid)))
+                    .expect("disco");
                 mode = ExecutionMode::Pause;
             };
 
             match mode {
                 ExecutionMode::Continue => {}
                 ExecutionMode::Halt => {
-                    state_sender.send(Event::TargetStopped(MultiThreadStopReason::Exited(0))).expect("disco");
-                },
+                    state_sender
+                        .send(Event::TargetStopped(MultiThreadStopReason::Exited(0)))
+                        .expect("disco");
+                }
                 ExecutionMode::Pause => continue,
                 ExecutionMode::Step => mode = ExecutionMode::Pause,
             }
@@ -125,22 +152,13 @@ impl Emulator {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("exited at: {:?}", e);
-                    state_sender.send(Event::TargetStopped(MultiThreadStopReason::Exited(1))).expect("disco");
+                    state_sender
+                        .send(Event::TargetStopped(MultiThreadStopReason::Exited(1)))
+                        .expect("disco");
                     break;
                 }
             }
         }
-    }
-
-    fn run_debugreader(&self, conn: &mut TcpStream) {
-        thread::spawn(move || {
-            loop {
-                let byte = conn
-                    .read()
-                    .map_err(run_blocking::WaitForStopReasonError::Connection)?;
-                self.byte_sender.send(Event::IncomingData(byte)).expect("disco");
-            }
-        });
     }
 
     fn handle_cmd(
@@ -187,18 +205,19 @@ impl Emulator {
 // Implements interface used by runner
 impl Emulator {
     pub(crate) fn stop_in_response_to_ctrl_c_interrupt(&self) -> Result<(), Fault> {
-        self.sender.send(EmulationCommand::SetResumeAction(ExecutionMode::Pause)).expect("disco");
+        self.sender
+            .send(EmulationCommand::SetResumeAction(ExecutionMode::Pause))
+            .expect("disco");
         Ok(())
     }
 
     pub(crate) fn read_stop_event(&self) -> Event<MultiThreadStopReason<u64>> {
         match self.state_receiver.recv() {
             Ok(o) => o,
-            Err(e) => {}
+            Err(e) => panic!("booh"),
         }
     }
 }
-
 
 impl target::Target for Emulator {
     type Arch = gdbstub_arch::riscv::Riscv64;
@@ -212,151 +231,5 @@ impl target::Target for Emulator {
         &mut self,
     ) -> Option<target::ext::breakpoints::BreakpointsOps<'_, Self>> {
         Some(self)
-    }
-}
-
-impl target::ext::base::multithread::MultiThreadBase for Emulator {
-    fn read_registers(
-        &mut self,
-        regs: &mut <Self::Arch as Arch>::Registers,
-        tid: Tid,
-    ) -> TargetResult<(), Self> {
-        let (sender, receiver) = mpsc::channel();
-        self.sender
-            .send(EmulationCommand::ReadRegisters(sender))
-            .expect("disco");
-        let registers = receiver.recv().expect("disco");
-        regs.pc = registers[0];
-        for i in 0..=31 {
-            regs.x[i] = registers[i + 1];
-        }
-
-        eprintln!("reading registers from tid:{} regs: {:?}", tid, regs);
-        Ok(())
-    }
-
-    fn write_registers(
-        &mut self,
-        regs: &<Self::Arch as Arch>::Registers,
-        tid: Tid,
-    ) -> TargetResult<(), Self> {
-        let mut registers = vec![regs.pc];
-        registers.extend_from_slice(&regs.x);
-        self.sender
-            .send(EmulationCommand::SetRegisters(registers))
-            .expect("disco");
-
-        eprintln!("writing registers to tid:{} regs: {:?}", tid, regs);
-        Ok(())
-    }
-
-    fn read_addrs(
-        &mut self,
-        start_addr: <Self::Arch as Arch>::Usize,
-        data: &mut [u8],
-        tid: Tid,
-    ) -> TargetResult<(), Self> {
-        self.bus.read(start_addr as usize, data).unwrap_or_default();
-
-        eprintln!("reading from tid:{} addr {:x}: {:?}", tid, start_addr, data);
-        Ok(())
-    }
-
-    fn write_addrs(
-        &mut self,
-        start_addr: <Self::Arch as Arch>::Usize,
-        data: &[u8],
-        tid: Tid,
-    ) -> TargetResult<(), Self> {
-        self.bus.write(start_addr as usize, data).expect("asdf");
-
-        eprintln!("writing to tid:{} addr {:x}: {:?}", tid, start_addr, data);
-        Ok(())
-    }
-
-    fn list_active_threads(
-        &mut self,
-        thread_is_active: &mut dyn FnMut(Tid),
-    ) -> Result<(), Self::Error> {
-        eprintln!("registering active thread: {}", 1);
-        thread_is_active(Tid::new(1).unwrap());
-        Ok(())
-    }
-
-    fn support_resume(
-        &mut self,
-    ) -> Option<target::ext::base::multithread::MultiThreadResumeOps<'_, Self>> {
-        Some(self)
-    }
-}
-
-impl target::ext::base::multithread::MultiThreadResume for Emulator {
-    fn resume(&mut self) -> Result<(), Self::Error> {
-        eprintln!("> resume");
-        self.sender.send(EmulationCommand::Resume).expect("disco");
-        Ok(())
-    }
-
-    fn clear_resume_actions(&mut self) -> Result<(), Self::Error> {
-        eprintln!("> clear_resume_actions");
-        self.sender
-            .send(EmulationCommand::ClearResumeAction)
-            .expect("disco");
-        Ok(())
-    }
-
-    fn set_resume_action_continue(
-        &mut self,
-        _tid: Tid,
-        signal: Option<gdbstub::common::Signal>,
-    ) -> Result<(), Self::Error> {
-        if signal.is_some() {
-            // No support for resuming via signals
-            return Err(Fault::Unimplemented);
-        }
-
-        eprintln!("> set_resume_action_continue");
-        self.sender
-            .send(EmulationCommand::SetResumeAction(ExecutionMode::Continue))
-            .expect("disco");
-        Ok(())
-    }
-}
-
-impl target::ext::breakpoints::Breakpoints for Emulator {
-    fn support_sw_breakpoint(
-        &mut self,
-    ) -> Option<target::ext::breakpoints::SwBreakpointOps<'_, Self>> {
-        Some(self)
-    }
-}
-
-impl target::ext::breakpoints::SwBreakpoint for Emulator {
-    fn add_sw_breakpoint(
-        &mut self,
-        addr: <Self::Arch as Arch>::Usize,
-        kind: <Self::Arch as Arch>::BreakpointKind,
-    ) -> TargetResult<bool, Self> {
-        eprintln!("adding breakpoint on {:x}({})", addr, kind);
-
-        self.sender
-            .send(EmulationCommand::AddBreakpoint(addr as usize))
-            .expect("disco");
-
-        Ok(true)
-    }
-
-    fn remove_sw_breakpoint(
-        &mut self,
-        addr: <Self::Arch as Arch>::Usize,
-        kind: <Self::Arch as Arch>::BreakpointKind,
-    ) -> TargetResult<bool, Self> {
-        eprintln!("removing breakpoint on {:x}({})", addr, kind);
-
-        self.sender
-            .send(EmulationCommand::RemoveBreakpoint(addr as usize))
-            .expect("disco");
-
-        Ok(true)
     }
 }

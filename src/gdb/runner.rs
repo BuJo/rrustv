@@ -1,8 +1,8 @@
 use std::net::TcpStream;
 
 use gdbstub::common::Signal;
-use gdbstub::conn::{Connection, ConnectionExt};
-use gdbstub::stub::{MultiThreadStopReason, run_blocking};
+use gdbstub::conn::Connection;
+use gdbstub::stub::{run_blocking, MultiThreadStopReason};
 use gdbstub::target::Target;
 
 use crate::gdb::emulator::Emulator;
