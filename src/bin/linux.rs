@@ -1,9 +1,12 @@
 use object::{Object, ObjectSection};
+use rriscv::dt;
 use rriscv::dynbus::DynBus;
 use rriscv::gdb::debugger::Debugger;
 use rriscv::gdb::emulator::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
+use rriscv::reg::{reg, treg};
+use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use std::net::TcpStream;
 use std::ops::Range;
@@ -42,9 +45,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rtc = Rtc::new();
     bus.map(rtc, 0x4000..0x4020);
 
+    let device_tree = dt::load();
+    let dtb_start = 0x8000;
+    let dtb_end = dtb_start + device_tree.len();
+    let dtb = Rom::new(device_tree);
+    bus.map(dtb, 0x8000..dtb_end);
+
     let bus = Arc::new(bus);
 
-    let hart = Hart::new(0, pc, bus.clone());
+    let mut hart = Hart::new(0, pc, bus.clone());
+
+    // linux register state
+    hart.set_register(treg("a0"), 0);
+    hart.set_register(treg("a1"), dtb_start as u64);
+    hart.set_csr(rriscv::csr::SATP, 0);
 
     let mut emu = Emulator::new_plain(hart, bus);
 

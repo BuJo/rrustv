@@ -14,6 +14,7 @@ pub const MIMPID: usize = 0xF13;
 pub const MHARTID: usize = 0xF14;
 pub const MCYCLE: usize = 0xB00;
 pub const MINSTRET: usize = 0xB02;
+pub const SATP: usize = 0x180;
 
 type CsrFn = for<'a> fn(&'a Csr, usize) -> u64;
 type CsrWrFn = for<'a> fn(&'a mut Csr, usize, u64);
