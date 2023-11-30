@@ -14,7 +14,7 @@ use crate::see;
 pub struct Hart<BT: Device> {
     start_pc: usize,
 
-    bus: Arc<BT>,
+    pub(crate) bus: Arc<BT>,
     registers: [u64; 32],
     pc: usize,
     csr: Csr,
@@ -76,6 +76,14 @@ impl<BT: Device> Hart<BT> {
             0..=31 => self.registers[reg as usize],
             _ => panic!(),
         }
+    }
+
+    pub fn set_csr(&mut self, csr: usize, val: u64) {
+        self.csr.write(csr, val);
+    }
+
+    pub fn get_pc(&self) -> usize {
+        self.pc
     }
 
     fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {

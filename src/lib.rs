@@ -12,3 +12,4 @@ pub mod reg;
 pub mod rom;
 pub mod rtc;
 pub mod see;
+pub mod gdb;

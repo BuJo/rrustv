@@ -14,6 +14,7 @@ pub const MIMPID: usize = 0xF13;
 pub const MHARTID: usize = 0xF14;
 pub const MCYCLE: usize = 0xB00;
 pub const MINSTRET: usize = 0xB02;
+pub const SATP: usize = 0x180;
 
 type CsrFn = for<'a> fn(&'a Csr, usize) -> u64;
 type CsrWrFn = for<'a> fn(&'a mut Csr, usize, u64);
@@ -51,7 +52,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (0x143, "stval", handle_nop, handle_nop_wr),
     (0x144, "sip", handle_nop, handle_nop_wr),
     // Supervisor Protection and Translation
-    (0x180, "satp", handle_nop, handle_nop_wr),
+    (SATP, "satp", handle_nop, handle_nop_wr),
     // Supervisor Debug/Trace Registers
     (0x5A8, "scontext", handle_nop, handle_nop_wr),
     // Hypervisor Trap Setup
