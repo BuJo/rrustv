@@ -27,7 +27,7 @@ impl run_blocking::BlockingEventLoop for GdbBlockingEventLoop {
             <Self::Connection as Connection>::Error,
         >,
     > {
-        Ok(target.read_stop_event())
+        Ok(target.read_stop_event(conn))
     }
 
     // Invoked when the GDB client sends a Ctrl-C interrupt.

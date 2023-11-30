@@ -73,7 +73,7 @@ impl<BT: Device> Hart<BT> {
     pub fn get_csr(&self, csr: usize) -> u64 {
         self.csr.read(csr)
     }
-    pub fn set_csr(&mut self, csr: usize, val: u64) -> u64 {
+    pub fn set_csr(&mut self, csr: usize, val: u64)  {
         self.csr.write(csr, val);
     }
 

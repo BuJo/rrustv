@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+use std::net::TcpStream;
 use std::ops::Range;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc, Once};
+use std::sync::mpsc::{Receiver, Sender, SendError, TryRecvError};
 use std::thread;
 
 use gdbstub::common::Tid;
-use gdbstub::stub::run_blocking::Event;
+use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::MultiThreadStopReason;
+use gdbstub::stub::run_blocking::Event;
 use gdbstub::target;
 use gdbstub::target::ext::base::BaseOps;
 use gdbstub::target::ext::base::BaseOps::MultiThread;
@@ -42,6 +45,8 @@ pub struct Emulator {
     pub(crate) sender: Sender<EmulationCommand>,
     state_receiver: Receiver<Event<MultiThreadStopReason<u64>>>,
     byte_sender: Sender<Event<MultiThreadStopReason<u64>>>,
+    start_conn_reader: Once,
+    gdb_connections: HashMap<TcpStream, bool>,
 }
 
 impl Emulator {
@@ -82,6 +87,8 @@ impl Emulator {
             sender,
             state_receiver,
             byte_sender,
+            start_conn_reader: Once::new(),
+            gdb_connections: HashMap::new(),
         }
     }
 
@@ -99,6 +106,8 @@ impl Emulator {
             sender,
             state_receiver,
             byte_sender,
+            start_conn_reader: Once::new(),
+            gdb_connections: HashMap::new(),
         }
     }
 
@@ -131,10 +140,17 @@ impl Emulator {
             if let Some(bp) = breakpoints.iter().find(|x| **x == hart.get_pc()) {
                 // breakpoint found, stopping execution
                 eprintln!("breakpoint found: {:x}", bp);
-                state_sender
-                    .send(Event::TargetStopped(MultiThreadStopReason::SwBreak(tid)))
-                    .expect("disco");
                 mode = ExecutionMode::Pause;
+                let snd = state_sender
+                    .send(Event::TargetStopped(MultiThreadStopReason::SwBreak(tid)));
+                match snd {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // we must be disconnected, assume no debugging
+                        breakpoints.clear();
+                        mode = ExecutionMode::Continue;
+                    }
+                }
             };
 
             match mode {
@@ -211,10 +227,35 @@ impl Emulator {
         Ok(())
     }
 
-    pub(crate) fn read_stop_event(&self) -> Event<MultiThreadStopReason<u64>> {
+    pub(crate) fn read_stop_event(
+        &self,
+        conn: &mut TcpStream,
+    ) -> Event<MultiThreadStopReason<u64>> {
+        if !self.start_conn_reader.is_completed() {
+            let byte_sender = self.byte_sender.clone();
+            let mut conn = conn.try_clone().expect("disco");
+            self.start_conn_reader.call_once(move || {
+                thread::spawn(move || {
+                    loop {
+                        match conn.read() {
+                            Ok(data) => {
+                                eprintln!("gdb data: {:x} {}", data, data as char);
+                                byte_sender
+                                    .send(Event::IncomingData(data))
+                                    .expect("disco")
+                            },
+                            Err(_) => byte_sender
+                                .send(Event::TargetStopped(MultiThreadStopReason::Exited(1)))
+                                .expect("disco"),
+                        }
+                    }
+                });
+            });
+        }
+
         match self.state_receiver.recv() {
             Ok(o) => o,
-            Err(e) => panic!("booh"),
+            Err(e) => panic!("{}", e),
         }
     }
 }
