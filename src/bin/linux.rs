@@ -12,6 +12,7 @@ use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
+use rriscv::uart8250::Uart8250;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 
@@ -54,6 +55,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dtb_end = dtb_start + device_tree.len();
     let dtb = Rom::new(device_tree);
     bus.map(dtb, 0x8000..dtb_end);
+
+    let console = Uart8250::new();
+    bus.map(console, 0x10000000..0x100000FF);
 
     let bus = Arc::new(bus);
 
