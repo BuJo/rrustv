@@ -14,7 +14,7 @@ use crate::see;
 pub struct Hart<BT: Device> {
     start_pc: usize,
 
-    bus: Arc<BT>,
+    pub(crate) bus: Arc<BT>,
     registers: [u64; 32],
     pc: usize,
     csr: Csr,
@@ -76,6 +76,14 @@ impl<BT: Device> Hart<BT> {
             0..=31 => self.registers[reg as usize],
             _ => panic!(),
         }
+    }
+
+    pub fn set_csr(&mut self, csr: usize, val: u64) {
+        self.csr.write(csr, val);
+    }
+
+    pub fn get_pc(&self) -> usize {
+        self.pc
     }
 
     fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
@@ -1033,7 +1041,8 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, self.csr.read(csr));
 
                 if rs1 != 0 {
-                    self.csr.write(csr, self.csr.read(csr) | self.get_register(rs1));
+                    self.csr
+                        .write(csr, self.csr.read(csr) | self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1055,7 +1064,8 @@ impl<BT: Device> Hart<BT> {
                 }
 
                 if rs1 != 0 {
-                    self.csr.write(csr, self.csr.read(csr) & !self.get_register(rs1));
+                    self.csr
+                        .write(csr, self.csr.read(csr) & !self.get_register(rs1));
                 }
 
                 self.dbgins(
@@ -1361,7 +1371,8 @@ impl<BT: Device> Hart<BT> {
         // Note that synchronous exceptions (like ebreak/ecall) do not increase the count of
         // retired instructions.  This means, any time an instruction needs to skip the `minstret`
         // increase, it should do an early return in the match expression.
-        self.csr.write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
+        self.csr
+            .write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
 
         Ok(())
     }
