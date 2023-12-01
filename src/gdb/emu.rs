@@ -1,25 +1,35 @@
+use std::borrow::Cow;
+use std::cell::RefCell;
+
+use gdb_remote_protocol::Signal::SIGTRAP;
+use gdb_remote_protocol::{
+    Breakpoint, Error, Handler, Id, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
+    VContFeature,
+};
+use log::debug;
+
 use crate::device::Device;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
 use crate::plic::Fault;
-use gdb_remote_protocol::{
-    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
-    VContFeature,
-};
-use log::debug;
-use std::borrow::Cow;
-use std::cell::RefCell;
 
 pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
+    hart_id: ThreadId,
     breakpoints: RefCell<Vec<usize>>,
+    state: RefCell<StopReason>,
 }
 
 impl Emulator {
     pub fn new(hart: Hart<DynBus>) -> Emulator {
         Emulator {
             hart: hart.into(),
+            hart_id: ThreadId {
+                pid: Id::Id(1),
+                tid: Id::Id(1),
+            },
             breakpoints: RefCell::new(vec![]),
+            state: RefCell::new(StopReason::Signal(2)),
         }
     }
 }
@@ -28,6 +38,17 @@ impl Handler for Emulator {
     fn attached(&self, _pid: Option<u64>) -> Result<ProcessType, Error> {
         debug!("process attached");
         Ok(ProcessType::Attached)
+    }
+
+    fn detach(&self, _pid: Option<u64>) -> Result<(), Error> {
+        debug!("process detached");
+        Ok(())
+    }
+
+    fn kill(&self, pid: Option<u64>) -> Result<(), Error> {
+        let pid = pid.unwrap_or(1);
+        self.state.replace(StopReason::Exited(pid, 0));
+        Ok(())
     }
 
     fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
@@ -55,14 +76,31 @@ impl Handler for Emulator {
         Ok(result)
     }
 
+    fn current_thread(&self) -> Result<Option<ThreadId>, Error> {
+        Ok(Some(self.hart_id))
+    }
+
     fn halt_reason(&self) -> Result<StopReason, Error> {
         debug!("halted");
-        Ok(StopReason::Signal(2))
+        Ok(*self.state.borrow())
     }
 
     fn set_address_randomization(&self, _enable: bool) -> Result<(), Error> {
         Ok(())
     }
+
+    fn thread_info(&self, _thread: ThreadId) -> Result<String, Error> {
+        Ok("rriscv".into())
+    }
+
+    fn thread_list(&self, reset: bool) -> Result<Vec<ThreadId>, Error> {
+        if reset {
+            Ok(vec![self.hart_id])
+        } else {
+            Ok(vec![])
+        }
+    }
+
     fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
         let addr = breakpoint.addr as usize;
         if !self.breakpoints.borrow_mut().contains(&addr) {
@@ -71,15 +109,28 @@ impl Handler for Emulator {
         Ok(())
     }
 
+    fn insert_hardware_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        self.insert_software_breakpoint(breakpoint)
+    }
+
     fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
         self.breakpoints
             .borrow_mut()
             .retain(|addr| *addr != (breakpoint.addr as usize));
         Ok(())
     }
+
+    fn remove_hardware_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        self.remove_software_breakpoint(breakpoint)
+    }
+
     fn query_supported_vcont(&self) -> Result<Cow<'static, [VContFeature]>, Error> {
         Ok(Cow::from(
-            &[VContFeature::Continue, VContFeature::ContinueWithSignal][..],
+            &[
+                VContFeature::Continue,
+                VContFeature::ContinueWithSignal,
+                VContFeature::Step,
+            ][..],
         ))
     }
 
@@ -94,6 +145,14 @@ impl Handler for Emulator {
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(5))
+            }
+            VCont::Step => {
+                self.hart.borrow_mut().tick()?;
+                Ok(StopReason::Signal(SIGTRAP as u8))
+            }
+            VCont::StepWithSignal(sig) => {
+                self.hart.borrow_mut().tick()?;
+                Ok(StopReason::Signal(sig))
             }
             _ => Err(Error::Unimplemented),
         }
