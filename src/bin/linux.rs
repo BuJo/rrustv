@@ -12,9 +12,9 @@ use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
-use rriscv::uart8250::Uart8250;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
+use rriscv::uart8250::Uart8250;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();

@@ -404,7 +404,12 @@ impl<BT: Device> Hart<BT> {
             // RV64M
             // mul MUL word
             R {
-                opcode: 0b0110011, rd, funct3: 0b000, rs1, rs2, funct7: 0b1
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b000,
+                rs1,
+                rs2,
+                funct7: 0b1,
             } => {
                 let val = self.get_register(rs1) * self.get_register(rs2);
                 self.set_register(rd, val);
@@ -412,13 +417,17 @@ impl<BT: Device> Hart<BT> {
             }
             // divw DIV word
             R {
-                opcode: 0b0111011, rd, funct3: 0b100, rs1, rs2, funct7: 0b1
+                opcode: 0b0111011,
+                rd,
+                funct3: 0b100,
+                rs1,
+                rs2,
+                funct7: 0b1,
             } => {
                 let val = self.get_register(rs1) / self.get_register(rs2);
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("divw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
-
 
             // addi ADD immediate
             I {

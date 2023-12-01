@@ -1,7 +1,7 @@
-use std::io;
-use std::io::{Read, Write};
 use crate::device::Device;
 use crate::plic::Fault;
+use std::io;
+use std::io::{Read, Write};
 
 pub struct Uart8250 {}
 

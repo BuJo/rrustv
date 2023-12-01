@@ -3,7 +3,7 @@ use std::cell::RefCell;
 
 use gdb_remote_protocol::Signal::SIGTRAP;
 use gdb_remote_protocol::{
-    Breakpoint, Error, Handler, Id, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
+    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
     VContFeature,
 };
 use log::debug;
@@ -15,7 +15,6 @@ use crate::plic::Fault;
 
 pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
-    hart_id: ThreadId,
     breakpoints: RefCell<Vec<usize>>,
 }
 
@@ -23,10 +22,6 @@ impl Emulator {
     pub fn new(hart: Hart<DynBus>) -> Emulator {
         Emulator {
             hart: hart.into(),
-            hart_id: ThreadId {
-                pid: Id::Id(1),
-                tid: Id::Id(1),
-            },
             breakpoints: RefCell::new(vec![]),
         }
     }
