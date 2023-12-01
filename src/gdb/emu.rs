@@ -17,7 +17,6 @@ pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
     hart_id: ThreadId,
     breakpoints: RefCell<Vec<usize>>,
-    state: RefCell<StopReason>,
 }
 
 impl Emulator {
@@ -29,7 +28,6 @@ impl Emulator {
                 tid: Id::Id(1),
             },
             breakpoints: RefCell::new(vec![]),
-            state: RefCell::new(StopReason::Signal(2)),
         }
     }
 }
@@ -42,12 +40,6 @@ impl Handler for Emulator {
 
     fn detach(&self, _pid: Option<u64>) -> Result<(), Error> {
         debug!("process detached");
-        Ok(())
-    }
-
-    fn kill(&self, pid: Option<u64>) -> Result<(), Error> {
-        let pid = pid.unwrap_or(1);
-        self.state.replace(StopReason::Exited(pid, 0));
         Ok(())
     }
 
@@ -76,29 +68,13 @@ impl Handler for Emulator {
         Ok(result)
     }
 
-    fn current_thread(&self) -> Result<Option<ThreadId>, Error> {
-        Ok(Some(self.hart_id))
-    }
-
     fn halt_reason(&self) -> Result<StopReason, Error> {
         debug!("halted");
-        Ok(*self.state.borrow())
+        Ok(StopReason::Signal(SIGTRAP as u8))
     }
 
     fn set_address_randomization(&self, _enable: bool) -> Result<(), Error> {
         Ok(())
-    }
-
-    fn thread_info(&self, _thread: ThreadId) -> Result<String, Error> {
-        Ok("rriscv".into())
-    }
-
-    fn thread_list(&self, reset: bool) -> Result<Vec<ThreadId>, Error> {
-        if reset {
-            Ok(vec![self.hart_id])
-        } else {
-            Ok(vec![])
-        }
     }
 
     fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
@@ -144,7 +120,7 @@ impl Handler for Emulator {
                 while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
                     cpu_ref.tick()?;
                 }
-                Ok(StopReason::Signal(5))
+                Ok(StopReason::Signal(SIGTRAP as u8))
             }
             VCont::Step => {
                 self.hart.borrow_mut().tick()?;
