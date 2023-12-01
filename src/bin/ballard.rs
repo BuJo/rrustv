@@ -1,3 +1,4 @@
+use log::{error, info, warn};
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -7,6 +8,8 @@ use rriscv::ram::Ram;
 use rriscv::rtc::Rtc;
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
 
@@ -29,13 +32,13 @@ fn main() {
         match m.tick() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("exited at: {} ({:?})", i, e);
+                info!("exited at: {} ({:?})", i, e);
                 break;
             }
         }
 
         if i >= 1_000_000 {
-            eprintln!("endless, killing");
+            warn!("endless, killing");
             break;
         }
         i += 1;

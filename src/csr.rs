@@ -1,3 +1,5 @@
+use log::trace;
+
 const XLEN: u64 = 32;
 
 pub const NUM_CSRS: usize = 4096;
@@ -204,7 +206,7 @@ impl Csr {
     }
 
     pub(crate) fn read(&self, csr: usize) -> u64 {
-        eprintln!("r csr {}[{:x}]", Csr::name(csr), self.csrs[csr]);
+        trace!("r csr {}[{:x}]", Csr::name(csr), self.csrs[csr]);
 
         for (i, _s, r, _w) in CSR_MAP {
             if i == csr {
@@ -216,7 +218,7 @@ impl Csr {
     }
 
     pub(crate) fn write(&mut self, csr: usize, val: u64) {
-        eprintln!(
+        trace!(
             "w csr {}[{:x}]->[{:x}]",
             Csr::name(csr),
             self.csrs[csr],
@@ -252,7 +254,7 @@ impl Csr {
 
         let legal_val = (base << 2) | mode;
 
-        eprintln!(
+        trace!(
             "r csr {}[{:x}]->[{:x}]",
             Csr::name(csr),
             self.csrs[csr],

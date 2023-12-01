@@ -1,3 +1,4 @@
+use log::{debug, info};
 use std::sync::Arc;
 use std::thread;
 use std::{env, fs};
@@ -8,6 +9,8 @@ use rriscv::ram::Ram;
 use rriscv::rom::Rom;
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     let threads = args.get(1).and_then(|x| x.parse::<u64>().ok()).unwrap_or(1);
 
@@ -24,13 +27,13 @@ fn main() {
         let bus = bus.clone();
 
         let handle = thread::spawn(move || {
-            eprintln!("[{}] hart spawned", id);
+            debug!("[{}] hart spawned", id);
             let mut m = Hart::new(id, 0, bus);
             for i in 0..100 {
                 match m.tick() {
                     Ok(_) => {}
                     Err(e) => {
-                        eprintln!("exited at: {} ({:?})", i, e);
+                        info!("exited at: {} ({:?})", i, e);
                         break;
                     }
                 }

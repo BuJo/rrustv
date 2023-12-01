@@ -1,3 +1,4 @@
+use log::debug;
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 
@@ -143,17 +144,17 @@ fn sbi_system_reset<BT: Device>(
 
     match reset_type {
         0x00000000 => {
-            eprintln!("Shutting down: {}: {}", reset_reason, reason);
+            debug!("Shutting down: {}: {}", reset_reason, reason);
             hart.stop();
             Ok(0)
         }
         0x00000001 => {
-            eprintln!("Cold reboot: {}: {}", reset_reason, reason);
+            debug!("Cold reboot: {}: {}", reset_reason, reason);
             hart.reset();
             Ok(0)
         }
         0x00000002 => {
-            eprintln!("Warm reboot: {}: {}", reset_reason, reason);
+            debug!("Warm reboot: {}: {}", reset_reason, reason);
             hart.reset();
             Ok(0)
         }
@@ -178,7 +179,7 @@ fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
             Ok(value)
         }
         Err(error) => {
-            eprintln!("error in syscall: {:?}", func);
+            debug!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }
@@ -214,7 +215,7 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
             Ok(value)
         }
         Err(error) => {
-            eprintln!("error in syscall: {:?}", func);
+            debug!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }

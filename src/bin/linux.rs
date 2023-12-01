@@ -1,20 +1,23 @@
+use std::net::TcpListener;
+use std::ops::Range;
+use std::sync::Arc;
+use std::{env, fs};
+
+use log::info;
 use object::{Object, ObjectSection};
+
 use rriscv::dt;
 use rriscv::dynbus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
-use rriscv::reg::{reg, treg};
+use rriscv::reg::treg;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
-use std::cell::RefCell;
-use std::net::{TcpListener, TcpStream};
-use std::ops::Range;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::{env, fs};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
 
@@ -23,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut bus = DynBus::new();
     let ram = Ram::new();
-    let mut pc = elf.entry() as usize;
+    let pc = elf.entry() as usize;
 
     for section in elf.sections() {
         let name = section.name().expect("section name");
@@ -62,16 +65,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     hart.set_csr(rriscv::csr::SATP, 0);
 
     let listener = TcpListener::bind("127.0.0.1:9001").unwrap();
-    println!("Listening on port 9001");
-
-    env_logger::init();
+    info!("Listening on port 9001");
 
     let debugger = Emulator::new(hart);
     if let Ok((stream, _addr)) = listener.accept() {
-        println!("Got connection");
+        info!("Got connection");
         gdb_remote_protocol::process_packets_from(stream.try_clone().unwrap(), stream, debugger);
     }
-    println!("Connection closed");
+    info!("Connection closed");
 
     Ok(())
 }

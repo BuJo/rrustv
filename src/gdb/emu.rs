@@ -6,6 +6,7 @@ use gdb_remote_protocol::{
     Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
     VContFeature,
 };
+use log::debug;
 use std::borrow::Cow;
 use std::cell::RefCell;
 
@@ -25,7 +26,7 @@ impl Emulator {
 
 impl Handler for Emulator {
     fn attached(&self, _pid: Option<u64>) -> Result<ProcessType, Error> {
-        eprintln!("process attached");
+        debug!("process attached");
         Ok(ProcessType::Attached)
     }
 
@@ -43,7 +44,7 @@ impl Handler for Emulator {
     }
 
     fn read_general_registers(&self) -> Result<Vec<u8>, Error> {
-        eprintln!("reading registers");
+        debug!("reading registers");
         let mut result = Vec::new();
         for i in 0..32 {
             let reg = self.hart.borrow().get_register(i);
@@ -55,7 +56,7 @@ impl Handler for Emulator {
     }
 
     fn halt_reason(&self) -> Result<StopReason, Error> {
-        eprintln!("halted");
+        debug!("halted");
         Ok(StopReason::Signal(2))
     }
 
@@ -83,7 +84,7 @@ impl Handler for Emulator {
     }
 
     fn vcont(&self, request: Vec<(VCont, Option<ThreadId>)>) -> Result<StopReason, Error> {
-        eprintln!("continuing");
+        debug!("continuing");
         let req = request.first().unwrap();
         match req.0 {
             VCont::Continue => {

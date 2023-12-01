@@ -12,6 +12,7 @@ default-run = "rriscv"
 object = { version = "0.32.1" }
 gdb-remote-protocol = { git = "https://github.com/luser/rust-gdb-remote-protocol" }
 env_logger = "0.10.1"
+log = "0.4.20"
 
 [profile.dev]
 opt-level = 0

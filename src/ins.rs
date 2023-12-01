@@ -1,3 +1,4 @@
+use log::trace;
 use std::fmt;
 use std::fmt::{Formatter, LowerHex};
 
@@ -183,7 +184,7 @@ impl Instruction {
                 let imm = ((instruction as i32) >> 20) as i16;
 
                 if 0x12000073 == instruction {
-                    eprintln!("incompat?");
+                    trace!("incompat?");
                 }
 
                 // ecall / ebreak / csr*

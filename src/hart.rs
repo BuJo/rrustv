@@ -1,3 +1,4 @@
+use log::{debug, trace};
 use std::cmp;
 use std::sync::Arc;
 
@@ -92,7 +93,7 @@ impl<BT: Device> Hart<BT> {
         match ins & 0b11 {
             // 32-bit instruction
             0b11 => {
-                eprintln!(
+                debug!(
                     "[{}] [{:#x}] {:07b} Opcode for ins {:08x} {:032b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
@@ -106,7 +107,7 @@ impl<BT: Device> Hart<BT> {
             // 16-bit compressed instruction
             _ => {
                 let ins = self.bus.read_half(self.pc)?;
-                eprintln!(
+                debug!(
                     "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
@@ -1358,7 +1359,7 @@ impl<BT: Device> Hart<BT> {
             }
 
             _ => {
-                eprintln!(
+                debug!(
                     "[{}] Unknown instruction: {:}",
                     self.csr.read(csr::MHARTID),
                     instruction
@@ -1380,10 +1381,10 @@ impl<BT: Device> Hart<BT> {
     fn dbgins(&self, ins: Instruction, asm: String) {
         match ins {
             Instruction::IRV32(ins) => {
-                eprintln!("{:08x}:\t{:08x}          \t{}", self.pc - 4, ins, asm)
+                trace!("{:08x}:\t{:08x}          \t{}", self.pc - 4, ins, asm)
             }
             Instruction::CRV32(ins) => {
-                eprintln!("{:08x}:\t{:04x}                \t{}", self.pc - 2, ins, asm)
+                trace!("{:08x}:\t{:04x}                \t{}", self.pc - 2, ins, asm)
             }
         }
     }

@@ -1,3 +1,4 @@
+use log::{info, warn};
 use std::fs::File;
 use std::io::Write;
 use std::ops::Range;
@@ -15,6 +16,8 @@ use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     let elf_file = args.get(1).expect("expect elf file");
     let sig_file = args.get(2);
@@ -58,13 +61,13 @@ fn main() {
         match m.tick() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("exited at: {} ({:?})", i, e);
+                info!("exited at: {} ({:?})", i, e);
                 break;
             }
         }
 
         if i >= 1_000_000 {
-            eprintln!("endless, killing");
+            warn!("endless, killing");
             break;
         }
         i += 1;
