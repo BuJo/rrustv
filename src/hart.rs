@@ -1292,7 +1292,7 @@ impl<BT: Device> Hart<BT> {
                 let _rl = funct7 & 0b1;
 
                 let addr = self.get_register(rs1) as usize;
-                let val = self.bus.read_double(addr)?;
+                let mut val = self.bus.read_double(addr)?;
                 let rs2val = self.get_register(rs2);
                 let new = match funct5 {
                     // amoswap.d
@@ -1313,6 +1313,25 @@ impl<BT: Device> Hart<BT> {
                         );
 
                         val.wrapping_add(rs2val)
+                    }
+                    // ld.d
+                    0x02 => {
+                        self.dbgins(
+                            ins,
+                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should register a reservation on `addr`
+                        val
+                    }
+                    // sc.d
+                    0x03 => {
+                        self.dbgins(
+                            ins,
+                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should test for reservation on `addr`
+                        val = 0; // Success, non-zero on failure
+                        rs2val
                     }
                     // amoand.d
                     0x0C => {
