@@ -1,10 +1,13 @@
-use std::borrow::Cow;
-use std::cell::RefCell;
-use gdb_remote_protocol::{Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont, VContFeature};
 use crate::device::Device;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
 use crate::plic::Fault;
+use gdb_remote_protocol::{
+    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
+    VContFeature,
+};
+use std::borrow::Cow;
+use std::cell::RefCell;
 
 pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
@@ -24,6 +27,19 @@ impl Handler for Emulator {
     fn attached(&self, _pid: Option<u64>) -> Result<ProcessType, Error> {
         eprintln!("process attached");
         Ok(ProcessType::Attached)
+    }
+
+    fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
+        let mut result: Vec<u8> = vec![];
+        for i in 0..region.length {
+            result.push(
+                self.hart
+                    .borrow()
+                    .bus
+                    .read_byte((region.address + i) as usize)?,
+            );
+        }
+        Ok(result)
     }
 
     fn read_general_registers(&self) -> Result<Vec<u8>, Error> {
@@ -46,15 +62,26 @@ impl Handler for Emulator {
     fn set_address_randomization(&self, _enable: bool) -> Result<(), Error> {
         Ok(())
     }
+    fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        let addr = breakpoint.addr as usize;
+        if !self.breakpoints.borrow_mut().contains(&addr) {
+            self.breakpoints.borrow_mut().push(addr);
+        }
+        Ok(())
+    }
 
+    fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        self.breakpoints
+            .borrow_mut()
+            .retain(|addr| *addr != (breakpoint.addr as usize));
+        Ok(())
+    }
     fn query_supported_vcont(&self) -> Result<Cow<'static, [VContFeature]>, Error> {
         Ok(Cow::from(
-            &[
-                VContFeature::Continue,
-                VContFeature::ContinueWithSignal,
-            ][..]
+            &[VContFeature::Continue, VContFeature::ContinueWithSignal][..],
         ))
     }
+
     fn vcont(&self, request: Vec<(VCont, Option<ThreadId>)>) -> Result<StopReason, Error> {
         eprintln!("continuing");
         let req = request.first().unwrap();
@@ -66,29 +93,9 @@ impl Handler for Emulator {
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(5))
-            },
-            _ => Err(Error::Unimplemented)
+            }
+            _ => Err(Error::Unimplemented),
         }
-    }
-
-    fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        let addr = breakpoint.addr as usize;
-        if !self.breakpoints.borrow_mut().contains(&addr) {
-            self.breakpoints.borrow_mut().push(addr);
-        }
-        Ok(())
-    }
-    fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        self.breakpoints.borrow_mut().retain(|addr| *addr != (breakpoint.addr as usize));
-        Ok(())
-    }
-
-    fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
-        let mut result: Vec<u8> = vec![];
-        for i in 0..region.length {
-            result.push(self.hart.borrow().bus.read_byte((region.address + i) as usize)?);
-        }
-        Ok(result)
     }
 }
 
@@ -96,11 +103,11 @@ impl From<Fault> for gdb_remote_protocol::Error {
     fn from(value: Fault) -> Self {
         match value {
             Fault::MemoryFault(_) => Error::Error(0),
-            Fault::Unaligned(_) =>  Error::Error(2),
-            Fault::Halt =>  Error::Error(3),
-            Fault::Unimplemented =>  Error::Unimplemented,
-            Fault::InstructionDecodingError =>  Error::Error(4),
-            Fault::IllegalOpcode(_) =>  Error::Error(5),
+            Fault::Unaligned(_) => Error::Error(2),
+            Fault::Halt => Error::Error(3),
+            Fault::Unimplemented => Error::Unimplemented,
+            Fault::InstructionDecodingError => Error::Error(4),
+            Fault::IllegalOpcode(_) => Error::Error(5),
         }
     }
 }

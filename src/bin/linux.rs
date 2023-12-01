@@ -7,12 +7,12 @@ use rriscv::ram::Ram;
 use rriscv::reg::{reg, treg};
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
+use std::cell::RefCell;
 use std::net::{TcpListener, TcpStream};
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{env, fs};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
