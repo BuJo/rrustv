@@ -103,6 +103,7 @@ impl Handler for Emulator {
                 VContFeature::Step,
                 VContFeature::StepWithSignal,
                 VContFeature::Stop,
+                VContFeature::RangeStep,
             ][..],
         ))
     }
@@ -126,6 +127,16 @@ impl Handler for Emulator {
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(s))
+            }
+            VCont::RangeStep(range) => {
+                let mut cpu_ref = self.hart.borrow_mut();
+                cpu_ref.tick()?;
+                while !self.breakpoints.borrow().contains(&cpu_ref.get_pc())
+                    && range.contains(&(cpu_ref.get_pc() as u64))
+                {
+                    cpu_ref.tick()?;
+                }
+                Ok(StopReason::Signal(SIGTRAP as u8))
             }
             VCont::Step => {
                 self.hart.borrow_mut().tick()?;
