@@ -111,7 +111,7 @@ impl Handler for Emulator {
     fn vcont(&self, request: Vec<(VCont, Option<ThreadId>)>) -> Result<StopReason, Error> {
         debug!("continuing");
         let req = request.first().unwrap();
-        match req.0 {
+        match &req.0 {
             VCont::Continue => {
                 let mut cpu_ref = self.hart.borrow_mut();
                 cpu_ref.tick()?;
@@ -120,13 +120,13 @@ impl Handler for Emulator {
                 }
                 Ok(StopReason::Signal(SIGTRAP as u8))
             }
-            VCont::ContinueWithSignal(s) => {
+            VCont::ContinueWithSignal(sig) => {
                 let mut cpu_ref = self.hart.borrow_mut();
                 cpu_ref.tick()?;
                 while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
                     cpu_ref.tick()?;
                 }
-                Ok(StopReason::Signal(s))
+                Ok(StopReason::Signal(*sig))
             }
             VCont::RangeStep(range) => {
                 let mut cpu_ref = self.hart.borrow_mut();
@@ -144,10 +144,9 @@ impl Handler for Emulator {
             }
             VCont::StepWithSignal(sig) => {
                 self.hart.borrow_mut().tick()?;
-                Ok(StopReason::Signal(sig))
+                Ok(StopReason::Signal(*sig))
             }
             VCont::Stop => Ok(StopReason::Signal(SIGSTOP as u8)),
-            _ => Err(Error::Unimplemented),
         }
     }
 }
