@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 
-use gdb_remote_protocol::Signal::SIGTRAP;
+use gdb_remote_protocol::Signal::{SIGSTOP, SIGTRAP};
 use gdb_remote_protocol::{
     Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
     VContFeature,
@@ -101,6 +101,8 @@ impl Handler for Emulator {
                 VContFeature::Continue,
                 VContFeature::ContinueWithSignal,
                 VContFeature::Step,
+                VContFeature::StepWithSignal,
+                VContFeature::Stop,
             ][..],
         ))
     }
@@ -117,6 +119,14 @@ impl Handler for Emulator {
                 }
                 Ok(StopReason::Signal(SIGTRAP as u8))
             }
+            VCont::ContinueWithSignal(s) => {
+                let mut cpu_ref = self.hart.borrow_mut();
+                cpu_ref.tick()?;
+                while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
+                    cpu_ref.tick()?;
+                }
+                Ok(StopReason::Signal(s))
+            }
             VCont::Step => {
                 self.hart.borrow_mut().tick()?;
                 Ok(StopReason::Signal(SIGTRAP as u8))
@@ -125,6 +135,7 @@ impl Handler for Emulator {
                 self.hart.borrow_mut().tick()?;
                 Ok(StopReason::Signal(sig))
             }
+            VCont::Stop => Ok(StopReason::Signal(SIGSTOP as u8)),
             _ => Err(Error::Unimplemented),
         }
     }
