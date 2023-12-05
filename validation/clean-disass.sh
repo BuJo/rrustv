@@ -5,6 +5,8 @@ sync
 dut="$1"
 ref="$2"
 
+sed -i 's/.*] //' $dut
+
 sed -i 's/\(lui.*,0x\)fff\(.....$\)/\1\2/' $dut
 sed -i 's/\(lui.*,0x\)fff\(.....$\)/\1\2/' $dut
 sed -i 's/add.*zero,zero,0 # 0/nop/' $dut
