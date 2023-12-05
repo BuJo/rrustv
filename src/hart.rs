@@ -1,6 +1,7 @@
-use log::{debug, trace};
 use std::cmp;
 use std::sync::Arc;
+
+use log::{debug, trace};
 
 use crate::csr;
 use crate::csr::Csr;
@@ -402,7 +403,7 @@ impl<BT: Device> Hart<BT> {
             }
 
             // RV64M
-            // mul MUL word
+            // mul MUL
             R {
                 opcode: 0b0110011,
                 rd,
@@ -415,6 +416,20 @@ impl<BT: Device> Hart<BT> {
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
+            // mulw MUL word
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0b000,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    * ((self.get_register(rs2) & 0xFFFFFFFF) as u32);
+                self.set_register(rd, val.sext());
+                self.dbgins(ins, format!("mulw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
             // divw DIV word
             R {
                 opcode: 0b0111011,
@@ -424,9 +439,110 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0b1,
             } => {
-                let val = self.get_register(rs1) / self.get_register(rs2);
+                let dividend = ((self.get_register(rs1) & 0xFFFFFFFF) as u32).sext();
+                let divisor = ((self.get_register(rs2) & 0xFFFFFFFF) as u32).sext();
+                let val = if divisor == 0 {
+                    0xFFFFFFFFFFFFFFFF
+                } else {
+                    dividend / divisor
+                };
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("divw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // div DIV
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b100,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = self.get_register(rs1) as i64;
+                let divisor = self.get_register(rs2) as i64;
+                let val = if divisor == 0 {
+                    0xFFFFFFFFFFFFFFFFu64 as i64
+                } else {
+                    dividend / divisor
+                };
+                self.set_register(rd, val as u64);
+                self.dbgins(ins, format!("div\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // divu DIV
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b101,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = self.get_register(rs1);
+                let divisor = self.get_register(rs2);
+                let val = if divisor == 0 {
+                    0xFFFFFFFFFFFFFFFF
+                } else {
+                    dividend / divisor
+                };
+                self.set_register(rd, val);
+                self.dbgins(ins, format!("divu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // divuw DIV word
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0b101,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32;
+                let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
+                let val = if divisor == 0 {
+                    0xFFFFFFFF
+                } else {
+                    dividend / divisor
+                };
+                self.set_register(rd, val.sext());
+                self.dbgins(ins, format!("divuw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // rem REM
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b110,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = self.get_register(rs1) as i64;
+                let divisor = self.get_register(rs2) as i64;
+                let val = if divisor == 0 {
+                    dividend
+                } else {
+                    dividend % divisor
+                };
+                self.set_register(rd, val as u64);
+                self.dbgins(ins, format!("rem\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // remu REM unsigned
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b111,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = self.get_register(rs1);
+                let divisor = self.get_register(rs2);
+                let val = if divisor == 0 {
+                    dividend
+                } else {
+                    dividend % divisor
+                };
+                self.set_register(rd, val);
+                self.dbgins(ins, format!("remu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
 
             // addi ADD immediate
