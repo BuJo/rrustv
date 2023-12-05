@@ -1,10 +1,10 @@
-use log::{info, warn};
 use std::fs::File;
 use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
 use std::{env, fs};
 
+use log::{info, warn};
 use object::{Object, ObjectSection, ObjectSymbol};
 
 use rriscv::device::Device;

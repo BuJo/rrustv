@@ -1,6 +1,7 @@
-use log::{error, info, warn};
 use std::sync::Arc;
 use std::{env, fs};
+
+use log::{info, warn};
 
 use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
