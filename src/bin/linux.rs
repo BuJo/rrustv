@@ -1,9 +1,14 @@
+use std::{env, fs};
 use std::net::TcpListener;
 use std::ops::Range;
 use std::sync::Arc;
-use std::{env, fs};
 
-use log::info;
+use log::{info, LevelFilter};
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::file::FileAppender;
+use log4rs::Config;
+use log4rs::config::{Appender, Logger, Root};
+use log4rs::encode::pattern::PatternEncoder;
 use object::{Object, ObjectSection};
 
 use rriscv::dt;
@@ -17,7 +22,23 @@ use rriscv::rtc::Rtc;
 use rriscv::uart8250::Uart8250;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    let stdout = ConsoleAppender::builder().build();
+    let debug = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
+        .build("debug.log")
+        .unwrap();
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(Appender::builder().build("debug", Box::new(debug)))
+        .logger(Logger::builder()
+            .appender("debug")
+            .additive(false)
+            .build("rriscv", LevelFilter::Trace))
+        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
+        .unwrap();
+
+    let _ = log4rs::init_config(config).unwrap();
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
