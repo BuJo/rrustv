@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use gdb_remote_protocol::Signal::{SIGSTOP, SIGTRAP};
 use gdb_remote_protocol::{
@@ -16,6 +18,7 @@ use crate::plic::Fault;
 pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
     breakpoints: RefCell<Vec<usize>>,
+    trap: Arc<AtomicBool>,
 }
 
 impl Emulator {
@@ -23,6 +26,7 @@ impl Emulator {
         Emulator {
             hart: hart.into(),
             breakpoints: RefCell::new(vec![]),
+            trap: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -30,6 +34,9 @@ impl Emulator {
 impl Handler for Emulator {
     fn attached(&self, _pid: Option<u64>) -> Result<ProcessType, Error> {
         debug!("process attached");
+
+        signal_hook::flag::register(signal_hook::consts::SIGTRAP, Arc::clone(&self.trap)).unwrap();
+
         Ok(ProcessType::Attached)
     }
 
@@ -116,6 +123,11 @@ impl Handler for Emulator {
                 let mut cpu_ref = self.hart.borrow_mut();
                 cpu_ref.tick()?;
                 while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
+                    if self.trap.load(Ordering::Relaxed) {
+                        self.trap.store(false, Ordering::Relaxed);
+                        return Ok(StopReason::Signal(SIGTRAP as u8));
+                    }
+
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(SIGTRAP as u8))
@@ -124,6 +136,11 @@ impl Handler for Emulator {
                 let mut cpu_ref = self.hart.borrow_mut();
                 cpu_ref.tick()?;
                 while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
+                    if self.trap.load(Ordering::Relaxed) {
+                        self.trap.store(false, Ordering::Relaxed);
+                        return Ok(StopReason::Signal(SIGTRAP as u8));
+                    }
+
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(*sig))
@@ -134,6 +151,11 @@ impl Handler for Emulator {
                 while !self.breakpoints.borrow().contains(&cpu_ref.get_pc())
                     && range.contains(&(cpu_ref.get_pc() as u64))
                 {
+                    if self.trap.load(Ordering::Relaxed) {
+                        self.trap.store(false, Ordering::Relaxed);
+                        return Ok(StopReason::Signal(SIGTRAP as u8));
+                    }
+
                     cpu_ref.tick()?;
                 }
                 Ok(StopReason::Signal(SIGTRAP as u8))
