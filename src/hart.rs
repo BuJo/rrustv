@@ -62,7 +62,13 @@ impl<BT: Device> Hart<BT> {
         // simulate passing of time
         self.csr.write(csr::MCYCLE, self.csr.read(csr::MCYCLE) + 3);
 
-        res
+        match res {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                debug!("hart fault: {:?}", err);
+                Err(err)
+            }
+        }
     }
 
     pub fn set_register(&mut self, reg: u8, val: u64) {
