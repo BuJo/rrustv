@@ -1,15 +1,15 @@
-use std::{env, fs};
 use std::net::TcpListener;
 use std::ops::Range;
 use std::sync::Arc;
+use std::{env, fs};
 
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::file::FileAppender;
-use log4rs::Config;
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
-use object::{Object, ObjectSection};
+use log4rs::Config;
+use object::{Object, ObjectSection, ObjectSymbol};
 
 use rriscv::dt;
 use rriscv::dynbus::DynBus;
@@ -31,10 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("debug", Box::new(debug)))
-        .logger(Logger::builder()
-            .appender("debug")
-            .additive(false)
-            .build("rriscv", LevelFilter::Trace))
+        .logger(
+            Logger::builder()
+                .appender("debug")
+                .additive(false)
+                .build("rriscv", LevelFilter::Trace),
+        )
         .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
         .unwrap();
 
@@ -42,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
+    let cmdline = args.get(2);
 
     let bin_data = fs::read(image_file).expect("file");
     let elf = object::File::parse(&*bin_data).expect("parsing");
@@ -58,6 +61,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ram.write(start - pc, data.to_vec());
             }
         }
+    }
+
+    {
+        let s = elf
+            .symbols()
+            .find(|s| s.name().unwrap() == "boot_command_line")
+            .unwrap();
+        let address = s.address() as usize;
+        let max_len = s.size() as usize;
+
+        let cmdline = if let Some(cmdline) = cmdline {
+            if cmdline.len() > max_len - 1 {
+                panic!("cmdline too long");
+            }
+            cmdline
+        } else {
+            //"root=/dev/vda rw earlycon=uart8250,mmio,0x10000000,115200n8 console=ttyS0 memblock=debug"
+            "earlycon=uart8250,mmio,0x10000000 console=ttyS0"
+        };
+        ram.write(address - pc, cmdline.to_string().into_bytes());
+        ram.write(address - pc + cmdline.len(), vec![0]);
     }
 
     bus.map(

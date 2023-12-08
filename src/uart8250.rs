@@ -22,7 +22,6 @@ impl Uart8250 {
 }
 
 impl Device for Uart8250 {
-
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
         Err(Fault::Unimplemented)
     }
@@ -64,14 +63,14 @@ impl Device for Uart8250 {
         let have_data: bool = false; // XXX: need a way to detect presence of data in stdin
 
         match addr {
-            Uart8250::LSR if have_data =>  {
+            Uart8250::LSR if have_data => {
                 let mut buffer = [0];
                 io::stdin().read_exact(&mut buffer)?;
                 Ok(buffer[0])
             }
             Uart8250::LSR => Ok(0x60 | have_data as u8),
             Uart8250::LCR => Ok(0b0_0_000_0_11),
-            _ => Ok(0)
+            _ => Ok(0),
         }
     }
 }
