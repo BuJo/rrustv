@@ -419,8 +419,38 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0b1,
             } => {
-                let val = self.get_register(rs1) * self.get_register(rs2);
+                let (val, _) = self
+                    .get_register(rs1)
+                    .overflowing_mul(self.get_register(rs2));
                 self.set_register(rd, val);
+                self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // mulhu MUL high unsigned
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b011,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let (val, _) = (self.get_register(rs1) as u128)
+                    .overflowing_mul(self.get_register(rs2) as u128);
+                self.set_register(rd, (val >> 64) as u64);
+                self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // mulhsu MUL high signed with unsigned
+            R {
+                opcode: 0b0110011,
+                rd,
+                funct3: 0b010,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let (val, _) = (self.get_register(rs1) as i64 as i128)
+                    .overflowing_mul(self.get_register(rs2) as u128 as i128);
+                self.set_register(rd, (val >> 64) as u64);
                 self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
             // mulw MUL word
@@ -432,8 +462,8 @@ impl<BT: Device> Hart<BT> {
                 rs2,
                 funct7: 0b1,
             } => {
-                let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
-                    * ((self.get_register(rs2) & 0xFFFFFFFF) as u32);
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
+                    .overflowing_mul((self.get_register(rs2) & 0xFFFFFFFF) as u32);
                 self.set_register(rd, val.sext());
                 self.dbgins(ins, format!("mulw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -550,6 +580,44 @@ impl<BT: Device> Hart<BT> {
                 };
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("remu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // remw REM word
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0b110,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32;
+                let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
+                let val = if divisor == 0 {
+                    dividend
+                } else {
+                    dividend % divisor
+                };
+                self.set_register(rd, val.sext());
+                self.dbgins(ins, format!("remw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
+            }
+            // remuw REM unsigned word
+            R {
+                opcode: 0b0111011,
+                rd,
+                funct3: 0b111,
+                rs1,
+                rs2,
+                funct7: 0b1,
+            } => {
+                let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32 as i32;
+                let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32 as i32;
+                let val = if divisor == 0 {
+                    dividend
+                } else {
+                    dividend % divisor
+                };
+                self.set_register(rd, val.sext());
+                self.dbgins(ins, format!("remuw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
 
             // addi ADD immediate
@@ -1327,9 +1395,28 @@ impl<BT: Device> Hart<BT> {
                 let _rl = funct7 & 0b1;
 
                 let addr = self.get_register(rs1) as usize;
-                let val = self.bus.read_word(addr)?;
+                let mut val = self.bus.read_word(addr)?;
                 let rs2val = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
                 let new = match funct5 {
+                    // lr.w
+                    0x02 => {
+                        self.dbgins(
+                            ins,
+                            format!("lr.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should register a reservation on `addr`
+                        val
+                    }
+                    // sc.w
+                    0x03 => {
+                        self.dbgins(
+                            ins,
+                            format!("sc.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should test for reservation on `addr`
+                        val = 0; // Success, non-zero on failure
+                        rs2val
+                    }
                     // amoswap.w
                     0x01 => {
                         self.dbgins(
@@ -1427,6 +1514,25 @@ impl<BT: Device> Hart<BT> {
                 let mut val = self.bus.read_double(addr)?;
                 let rs2val = self.get_register(rs2);
                 let new = match funct5 {
+                    // lr.d
+                    0x02 => {
+                        self.dbgins(
+                            ins,
+                            format!("lr.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should register a reservation on `addr`
+                        val
+                    }
+                    // sc.d
+                    0x03 => {
+                        self.dbgins(
+                            ins,
+                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
+                        );
+                        // XXX: should test for reservation on `addr`
+                        val = 0; // Success, non-zero on failure
+                        rs2val
+                    }
                     // amoswap.d
                     0x01 => {
                         self.dbgins(
@@ -1445,25 +1551,6 @@ impl<BT: Device> Hart<BT> {
                         );
 
                         val.wrapping_add(rs2val)
-                    }
-                    // ld.d
-                    0x02 => {
-                        self.dbgins(
-                            ins,
-                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
-                        // XXX: should register a reservation on `addr`
-                        val
-                    }
-                    // sc.d
-                    0x03 => {
-                        self.dbgins(
-                            ins,
-                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
-                        // XXX: should test for reservation on `addr`
-                        val = 0; // Success, non-zero on failure
-                        rs2val
                     }
                     // amoand.d
                     0x0C => {
