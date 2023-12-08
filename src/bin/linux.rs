@@ -95,14 +95,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rtc = Rtc::new();
     bus.map(rtc, 0x4000..0x4020);
 
-    let device_tree = dt::load();
+    let device_tree = dt::load("linux");
     let dtb_start = 0x8000;
     let dtb_end = dtb_start + device_tree.len();
     let dtb = Rom::new(device_tree);
     bus.map(dtb, 0x8000..dtb_end);
 
     let console = Uart8250::new();
-    bus.map(console, 0x10000000..0x100000FF);
+    bus.map(console, 0x10000000..0x10000010);
 
     // Add a rom at 0 to catch 0x00 reads
     let rom = Rom::new(vec![]);

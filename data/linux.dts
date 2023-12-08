@@ -1,0 +1,73 @@
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	model = "BuJo,rriscv";
+	aliases {
+	};
+
+	chosen {
+	};
+
+	firmware {
+	};
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        timebase-frequency = <1000000>;
+
+        cpu@0 {
+            device_type = "cpu";
+            reg = <0>;
+            status = "okay";
+            compatible = "riscv";
+            riscv,isa = "rv64im";
+            clock-frequency = <0>;
+            interrupt-controller {
+                #interrupt-cells = <1>;
+                interrupt-controller;
+                compatible = "riscv,cpu-intc";
+            };
+        };
+    };
+
+    memory@0 {
+		device_type = "memory";
+		reg = <0x80000000 0x00800000>;
+	};
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "BuJo,rriscv-soc", "simple-bus";
+		ranges;
+		refclk@4000 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			reg = <0x4000 0x20>;
+			clock-frequency = <1000>;
+			clock-output-names = "xtal";
+		};
+
+		rom@0 {
+            compatible = "BuJo,bootrom";
+            reg = <0x0 0x1000>;
+            reg-names = "rom";
+        };
+
+        pic_1: pic@20000000 {
+            reg = < 0x20000000 0x20 >;
+            interrupt-controller;
+            #interrupt-cells = <1>;
+        };
+    };
+
+    uart@10000000 {
+        compatible = "8250";
+        reg = <0x10000000 0x10>;
+        interrupt-parent = < &pic_1 >;
+        interrupts = <17 4>;
+    };
+};
