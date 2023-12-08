@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ram,
         Range {
             start: pc,
-            end: 0xFFFFFFFFFFFFFFFF,
+            end: 0x88000000,
         },
     );
 
@@ -79,6 +79,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let console = Uart8250::new();
     bus.map(console, 0x10000000..0x100000FF);
+
+    // Add a rom at 0 to catch 0x00 reads
+    let rom = Rom::new(vec![]);
+    bus.map(rom, 0x0..0x1000);
 
     let bus = Arc::new(bus);
 

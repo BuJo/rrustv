@@ -64,6 +64,7 @@ impl<BT: Device> Hart<BT> {
 
         match res {
             Ok(_) => Ok(()),
+            Err(Fault::MemoryFault(0)) => Ok(()), // Ignore zero-reads/writes
             Err(err) => {
                 debug!("hart fault: {:?}", err);
                 Err(err)

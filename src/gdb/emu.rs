@@ -177,6 +177,7 @@ impl From<Fault> for gdb_remote_protocol::Error {
     fn from(value: Fault) -> Self {
         match value {
             Fault::MemoryFault(_) => Error::Error(0),
+            Fault::Unmapped(_) => Error::Error(1),
             Fault::Unaligned(_) => Error::Error(2),
             Fault::Halt => Error::Error(3),
             Fault::Unimplemented => Error::Unimplemented,

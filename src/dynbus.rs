@@ -3,7 +3,6 @@ use std::sync::RwLock;
 
 use crate::device::Device;
 use crate::plic::Fault;
-use crate::plic::Fault::MemoryFault;
 
 type DeviceList = Vec<(Range<usize>, Box<dyn Device>)>;
 
@@ -47,7 +46,7 @@ impl Device for DynBus {
                 return device.write_double(addr - range.start, val);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         let devices = self.devices.read().unwrap();
@@ -57,7 +56,7 @@ impl Device for DynBus {
                 return device.write_word(addr - range.start, val);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 
     fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
@@ -68,7 +67,7 @@ impl Device for DynBus {
                 return device.write_half(addr - range.start, val);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
@@ -79,7 +78,7 @@ impl Device for DynBus {
                 return device.write_byte(addr - range.start, val);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {
@@ -90,7 +89,7 @@ impl Device for DynBus {
                 return device.read_double(addr - range.start);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let devices = self.devices.read().unwrap();
@@ -100,7 +99,7 @@ impl Device for DynBus {
                 return device.read_word(addr - range.start);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 
     fn read_half(&self, addr: usize) -> Result<u16, Fault> {
@@ -111,7 +110,7 @@ impl Device for DynBus {
                 return device.read_half(addr - range.start);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
@@ -122,7 +121,7 @@ impl Device for DynBus {
                 return device.read_byte(addr - range.start);
             }
         }
-        Err(MemoryFault(addr))
+        Err(Fault::Unmapped(addr))
     }
 }
 
