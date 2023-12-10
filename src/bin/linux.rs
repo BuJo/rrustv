@@ -19,7 +19,7 @@ use rriscv::ram::Ram;
 use rriscv::reg::treg;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
-use rriscv::uart8250::Uart8250;
+use rriscv::uart::Uart8250;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();
