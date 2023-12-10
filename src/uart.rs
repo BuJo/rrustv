@@ -39,7 +39,11 @@ impl Device for Uart8250 {
         match addr {
             Uart8250::RX => {
                 print!("{}", val as char);
-                io::stdout().flush().unwrap();
+
+                // only flush on special chars
+                if !(0x20..0x7e).contains(&val) {
+                    io::stdout().flush().unwrap();
+                }
             }
             _ => {}
         }
