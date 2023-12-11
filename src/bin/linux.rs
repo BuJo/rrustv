@@ -1,17 +1,17 @@
+use std::{env, fs};
 use std::net::TcpListener;
 use std::ops::Range;
 use std::sync::Arc;
-use std::{env, fs};
 
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Logger, Root};
-use log4rs::encode::pattern::PatternEncoder;
 use log4rs::Config;
-use object::{Object, ObjectSection, ObjectSymbol};
+use log4rs::encode::pattern::PatternEncoder;
+use object::{Object, ObjectSection};
 
-use rriscv::dt;
+use rriscv::{dt, virtio};
 use rriscv::dynbus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
@@ -95,18 +95,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rtc = Rtc::new();
     bus.map(rtc, 0x4000..0x4020);
 
-    let device_tree = dt::load("linux");
-    let dtb_start = 0x8000;
-    let dtb_end = dtb_start + device_tree.len();
-    let dtb = Rom::new(device_tree);
-    bus.map(dtb, 0x8000..dtb_end);
-
     let console = Uart8250::new();
     bus.map(console, 0x10000000..0x10000010);
 
     // Add a rom at 0 to catch 0x00 reads
     let rom = Rom::new(vec![]);
     bus.map(rom, 0x0..0x1000);
+
+    // virtio block device vda
+    let vda = virtio::Blk::new("/home/jbuch/scrap/rust/rriscv/buildroot/output/images/rootfs.ext2");
+    bus.map(vda, 0x1e000..0x1e200);
+
+    //let device_tree = dt::generate(&bus).unwrap();
+    let device_tree = dt::load("linux");
+    let dtb_start = 0x8000;
+    let dtb_end = dtb_start + device_tree.len();
+    let dtb = Rom::new(device_tree);
+    bus.map(dtb, 0x8000..dtb_end);
 
     let bus = Arc::new(bus);
 

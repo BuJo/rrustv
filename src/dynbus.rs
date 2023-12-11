@@ -4,7 +4,8 @@ use std::sync::RwLock;
 use crate::device::Device;
 use crate::plic::Fault;
 
-type DeviceList = Vec<(Range<usize>, Box<dyn Device>)>;
+type DeviceMapping = (Range<usize>, Box<dyn Device>);
+type DeviceList = Vec<DeviceMapping>;
 
 pub struct DynBus {
     devices: RwLock<DeviceList>,
@@ -28,6 +29,13 @@ impl DynBus {
         let mut devices = self.devices.write().unwrap();
 
         devices.push((range, Box::new(device)));
+    }
+
+    pub fn devices<F>(&self, f: F)
+    where
+        F: FnMut(&DeviceMapping),
+    {
+        self.devices.read().unwrap().iter().for_each(f)
     }
 }
 
