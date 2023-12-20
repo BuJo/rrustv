@@ -1,4 +1,5 @@
 pub mod bus;
+pub mod clint;
 pub mod csr;
 pub mod device;
 pub mod dt;
@@ -14,3 +15,4 @@ pub mod rom;
 pub mod rtc;
 pub mod see;
 pub mod uart;
+pub mod virtio;

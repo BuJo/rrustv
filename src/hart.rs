@@ -1,8 +1,9 @@
 use std::cmp;
 use std::sync::Arc;
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 
+use crate::clint;
 use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
@@ -52,6 +53,10 @@ impl<BT: Device> Hart<BT> {
     pub fn tick(&mut self) -> Result<(), Fault> {
         if self.stop {
             return Err(Halt);
+        }
+
+        if let Some(irq) = clint::interrupt(&self.csr) {
+            warn!("skipping interrupt: {}", irq);
         }
 
         let res = self

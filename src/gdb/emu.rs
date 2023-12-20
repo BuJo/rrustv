@@ -180,7 +180,7 @@ impl From<Fault> for gdb_remote_protocol::Error {
             Fault::Unmapped(_) => Error::Error(1),
             Fault::Unaligned(_) => Error::Error(2),
             Fault::Halt => Error::Error(3),
-            Fault::Unimplemented => Error::Unimplemented,
+            Fault::Unimplemented(_) => Error::Unimplemented,
             Fault::InstructionDecodingError => Error::Error(4),
             Fault::IllegalOpcode(_) => Error::Error(5),
         }

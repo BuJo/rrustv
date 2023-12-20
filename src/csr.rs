@@ -17,6 +17,8 @@ pub const MHARTID: usize = 0xF14;
 pub const MCYCLE: usize = 0xB00;
 pub const MINSTRET: usize = 0xB02;
 pub const SATP: usize = 0x180;
+pub const MIP: usize = 0x344;
+pub const MIE: usize = 0x304;
 
 type CsrFn = for<'a> fn(&'a Csr, usize) -> u64;
 type CsrWrFn = for<'a> fn(&'a mut Csr, usize, u64);
@@ -101,7 +103,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (MISA, "misa", Csr::read_any, Csr::write_any),
     (MEDELEG, "medeleg", Csr::read_any, Csr::write_any),
     (0x303, "mideleg", Csr::read_any, Csr::write_any),
-    (0x304, "mie", Csr::read_any, Csr::write_any),
+    (MIE, "mie", Csr::read_any, Csr::write_any),
     (MTVEC, "mtvec", Csr::read_mtvec, Csr::write_any),
     (0x306, "mcounteren", Csr::read_any, Csr::write_any),
     (0x310, "mstatush", Csr::read_any, Csr::write_any),
@@ -110,7 +112,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (0x341, "mepc", Csr::read_any, Csr::write_any),
     (0x342, "mcause", Csr::read_any, Csr::write_any),
     (0x343, "mtval", Csr::read_any, Csr::write_any),
-    (0x344, "mip", Csr::read_any, Csr::write_any),
+    (MIP, "mip", Csr::read_any, Csr::write_any),
     (0x34A, "minst", Csr::read_any, Csr::write_any),
     (0x34B, "mtval2", Csr::read_any, Csr::write_any),
     // Machine Configuration
@@ -206,7 +208,7 @@ impl Csr {
     }
 
     pub(crate) fn read(&self, csr: usize) -> u64 {
-        trace!("r csr {}[{:x}]", Csr::name(csr), self.csrs[csr]);
+        // trace!("r csr {}[{:x}]", Csr::name(csr), self.csrs[csr]);
 
         for (i, _s, r, _w) in CSR_MAP {
             if i == csr {
@@ -218,12 +220,12 @@ impl Csr {
     }
 
     pub(crate) fn write(&mut self, csr: usize, val: u64) {
-        trace!(
-            "w csr {}[{:x}]->[{:x}]",
-            Csr::name(csr),
-            self.csrs[csr],
-            val
-        );
+        // trace!(
+        //     "w csr {}[{:x}]->[{:x}]",
+        //     Csr::name(csr),
+        //     self.csrs[csr],
+        //     val
+        // );
 
         for (i, _s, _r, w) in CSR_MAP {
             if i == csr {
@@ -254,12 +256,12 @@ impl Csr {
 
         let legal_val = (base << 2) | mode;
 
-        trace!(
-            "r csr {}[{:x}]->[{:x}]",
-            Csr::name(csr),
-            self.csrs[csr],
-            legal_val
-        );
+        // trace!(
+        //     "r csr {}[{:x}]->[{:x}]",
+        //     Csr::name(csr),
+        //     self.csrs[csr],
+        //     legal_val
+        // );
 
         legal_val
     }

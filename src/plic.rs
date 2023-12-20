@@ -6,7 +6,7 @@ pub enum Fault {
     Unmapped(usize),
     Unaligned(usize),
     Halt,
-    Unimplemented,
+    Unimplemented(String),
     InstructionDecodingError,
     IllegalOpcode(Instruction),
 }

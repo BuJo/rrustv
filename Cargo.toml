@@ -15,7 +15,7 @@ env_logger = "0.10.1"
 log = "0.4.20"
 signal-hook = "0.3.17"
 term = "0.7.0"
-log4rs = { version = "1.2.0", default-features = false, features = ["console_appender", "file_appender", "pattern_encoder"] }
+log4rs = { version = "1.2.0" }
 config = "0.13.4"
 
 [profile.dev]

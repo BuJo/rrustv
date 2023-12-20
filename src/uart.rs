@@ -23,15 +23,21 @@ impl Uart8250 {
 
 impl Device for Uart8250 {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: writing double unimplemented".into(),
+        ))
     }
 
     fn write_word(&self, _addr: usize, _val: u32) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: writing word unimplemented".into(),
+        ))
     }
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: writing halfword unimplemented".into(),
+        ))
     }
 
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
@@ -51,15 +57,21 @@ impl Device for Uart8250 {
     }
 
     fn read_double(&self, _addr: usize) -> Result<u64, Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: reading double unimplemented".into(),
+        ))
     }
 
     fn read_word(&self, _addr: usize) -> Result<u32, Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: reading word unimplemented".into(),
+        ))
     }
 
     fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
-        Err(Fault::Unimplemented)
+        Err(Fault::Unimplemented(
+            "8250: reading halfword unimplemented".into(),
+        ))
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
@@ -81,6 +93,6 @@ impl Device for Uart8250 {
 
 impl From<io::Error> for Fault {
     fn from(_value: io::Error) -> Self {
-        Fault::MemoryFault(0)
+        Fault::Unimplemented("8250: io error not handled".into())
     }
 }
