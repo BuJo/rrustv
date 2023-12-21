@@ -22,6 +22,13 @@ struct State {
     DriverFeaturesSel: Sel,
     DeviceFeaturesSel: Sel,
     status: u32,
+    queue_ready: bool,
+    queue_idx: u32,
+    queue_size: u32,
+    queue_desc: u64,
+    queue_driver: u64,
+    queue_device: u64,
+    features: u64,
 }
 
 enum Sel {
@@ -104,6 +111,21 @@ impl BlkConfig {
     const OPT_IO_SIZE: usize = 28;
     const WRITEBACK: usize = 32;
     const NUM_QUEUES: usize = 34;
+    const MAX_DISCARD_SECTORS: usize = 0x24;
+    const MAX_DISCARD_SEG: usize = 0x28;
+    const DISCARD_SECTOR_ALIGNMENT: usize = 44;
+    const MAX_WRITE_ZEROES_SECTORS: usize = 48;
+    const MAX_WRITE_ZEROES_SEG: usize = 52;
+    const WRITE_ZEROES_MAY_UNMAP: usize = 56;
+    const MAX_SECURE_ERASE_SECTORS: usize = 60;
+    const MAX_SECURE_ERASE_SEG: usize = 64;
+    const SECURE_ERASE_SECTOR_ALIGNMENT: usize = 68;
+    const ZONE_SECTORS: usize = 72;
+    const MAX_OPEN_ZONES: usize = 76;
+    const MAX_ACTIVE_ZONES: usize = 80;
+    const MAX_APPEND_SECTORS: usize = 84;
+    const WRITE_GRANULARITY: usize = 88;
+    const MODEL: usize = 92;
 }
 
 struct Features {}
@@ -115,12 +137,8 @@ impl Features {
 
 impl Device {
     pub fn new_block_device(_s: &str) -> Device {
-        let features = (1 << (Features::VERSION_1 - 1))
-            | (1 << (Features::ACCESS_PLATFORM - 1))
-            | (1 << (BlkFlag::SIZE_MAX - 1))
-            | (1 << (BlkFlag::SEG_MAX - 1))
-            | (1 << (BlkFlag::RO - 1))
-            | (1 << (BlkFlag::BLK_SIZE - 1));
+        //let features = (1 << (Features::VERSION_1)) | (1 << (Features::ACCESS_PLATFORM));
+        let features = (1 << (Features::VERSION_1));
 
         Device {
             MagicValue: 0x74726976, // little endian "virt"
@@ -133,7 +151,17 @@ impl Device {
                 DriverFeatures: 0,
                 DeviceFeaturesSel: Sel::Low,
                 DriverFeaturesSel: Sel::Low,
+
+                features: 0,
                 status: 0,
+                queue_idx: 0,
+
+                // Queue 0
+                queue_ready: false,
+                queue_size: 0,
+                queue_desc: 0,
+                queue_driver: 0,
+                queue_device: 0,
             }),
         }
     }
@@ -168,13 +196,12 @@ impl D for Device {
             }
             Register::DriverFeatures => match (*state).DriverFeaturesSel {
                 Sel::Low => {
-                    state.DriverFeatures =
-                        state.DriverFeatures & 0xFFFFFFFF_00000000 | (val as u64);
+                    state.DriverFeatures = val as u64;
                     Ok(())
                 }
                 Sel::High => {
-                    state.DriverFeatures =
-                        state.DriverFeatures & 0x00000000_FFFFFFFF | ((val as u64) << 32);
+                    state.DriverFeatures = state.DriverFeatures | ((val as u64) << 32);
+                    info!("virtio: selected driver features: {:b}", state.DriverFeatures);
                     Ok(())
                 }
             },
@@ -207,8 +234,63 @@ impl D for Device {
                 }
                 Ok(())
             }
+            Register::QueueSel => {
+                info!("virtio: selecting queue {}", val);
+                state.queue_idx = val;
+                Ok(())
+            }
+            Register::QueueReady => {
+                info!(
+                    "virtio: queue {}: setting ready: {}",
+                    state.queue_idx,
+                    val != 00
+                );
+                state.queue_ready = val != 0;
+                Ok(())
+            }
+            Register::QueueSize => {
+                info!("virtio: queue {}: setting size: {}", state.queue_idx, val);
+                state.queue_size = val;
+                Ok(())
+            }
+            Register::QueueDescLow => {
+                state.queue_desc = val as u64;
+                Ok(())
+            }
+            Register::QueueDescHigh => {
+                info!(
+                    "virtio: queue {}: setting descriptor area: {}",
+                    state.queue_idx, val
+                );
+                state.queue_desc = ((val as u64) << 32) | state.queue_desc;
+                Ok(())
+            }
+            Register::QueueDriverLow => {
+                state.queue_driver = val as u64;
+                Ok(())
+            }
+            Register::QueueDriverHigh => {
+                info!(
+                    "virtio: queue {}: setting driver area: {}",
+                    state.queue_idx, val
+                );
+                state.queue_driver = ((val as u64) << 32) | state.queue_desc;
+                Ok(())
+            }
+            Register::QueueDeviceLow => {
+                state.queue_device = val as u64;
+                Ok(())
+            }
+            Register::QueueDeviceHigh => {
+                info!(
+                    "virtio: queue {}: setting device area: {}",
+                    state.queue_idx, val
+                );
+                state.queue_device = ((val as u64) << 32) | state.queue_desc;
+                Ok(())
+            }
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: writing register {} unimplemented",
+                "virtio: writing register 0x{:x} unimplemented",
                 addr
             ))),
         }
@@ -231,7 +313,7 @@ impl D for Device {
         let res = match addr {
             BlkConfig::CAPACITY => Ok(1),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register {} unimplemented",
+                "virtio: reading config register 0x{:x} unimplemented",
                 addr
             ))),
         };
@@ -249,24 +331,47 @@ impl D for Device {
             Register::Version => Ok(self.Version),
             Register::DeviceID => Ok(self.DeviceID),
             Register::VendorID => Ok(self.VendorID),
-            Register::DeviceFeatures => match (*state).DeviceFeaturesSel {
-                Sel::Low => Ok(((*state).DeviceFeatures | 0xFFFFFFFF) as u32),
-                Sel::High => Ok(((*state).DeviceFeatures >> 32) as u32),
-            },
+            Register::DeviceFeatures => {
+                let features = (*state).DeviceFeatures;
+
+                match (*state).DeviceFeaturesSel {
+                    Sel::Low => Ok((features & 0xFFFFFFFF) as u32),
+                    Sel::High => Ok((features >> 32) as u32),
+                }
+            }
             Register::Status => Ok(state.status),
             _ if addr >= 0x100 => {
                 let addr = addr - 0x100;
                 match addr {
                     BlkConfig::SIZE_MAX => Ok(512),
                     BlkConfig::SEG_MAX => Ok(1),
+                    BlkConfig::BLK_SIZE => Ok(512),
+                    BlkConfig::OPT_IO_SIZE => Ok(512),
+                    BlkConfig::MAX_DISCARD_SECTORS => Ok(0),
+                    BlkConfig::MAX_DISCARD_SEG => Ok(0),
+                    BlkConfig::DISCARD_SECTOR_ALIGNMENT => Ok(0),
+                    BlkConfig::MAX_WRITE_ZEROES_SECTORS => Ok(0),
+                    BlkConfig::MAX_WRITE_ZEROES_SEG => Ok(0),
+                    BlkConfig::MAX_SECURE_ERASE_SECTORS => Ok(0),
+                    BlkConfig::MAX_SECURE_ERASE_SEG => Ok(0),
+                    BlkConfig::SECURE_ERASE_SECTOR_ALIGNMENT => Ok(0),
+                    BlkConfig::ZONE_SECTORS => Ok(0),
+                    BlkConfig::MAX_OPEN_ZONES => Ok(0),
+                    BlkConfig::MAX_ACTIVE_ZONES => Ok(0),
+                    BlkConfig::MAX_APPEND_SECTORS => Ok(0),
+                    BlkConfig::WRITE_GRANULARITY => Ok(0),
+                    BlkConfig::MODEL => Ok(0),
                     _ => Err(Fault::Unimplemented(format!(
-                        "virtio: reading config register {} unimplemented",
+                        "virtio: reading config register 0x{:x}:u32 unimplemented",
                         addr
                     ))),
                 }
             }
+            Register::ConfigGeneration => Ok(0xdeadbeef),
+            Register::QueueReady => Ok(state.queue_ready as u32),
+            Register::QueueSizeMax => Ok(1),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading register {} unimplemented",
+                "virtio: reading register 0x{:x} unimplemented",
                 addr
             ))),
         };
@@ -279,9 +384,11 @@ impl D for Device {
     fn read_half(&self, addr: usize) -> Result<u16, Fault> {
         let addr = addr - 0x100;
         let res = match addr {
-            BlkConfig::NUM_QUEUES => Ok(1),
+            BlkConfig::NUM_QUEUES => Ok(4),
+            BlkConfig::MIN_IO_SIZE => Ok(1),
+            BlkConfig::WRITE_ZEROES_MAY_UNMAP => Ok(0),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register {} unimplemented",
+                "virtio: reading config register 0x{}:u16 unimplemented",
                 addr
             ))),
         };
@@ -294,8 +401,13 @@ impl D for Device {
     fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
         let addr = addr - 0x100;
         let res = match addr {
+            BlkConfig::WRITEBACK => {
+                Ok(0) // write through (1 is writeback)
+            }
+            BlkConfig::PHYSICAL_BLOCK_EXP => Ok(1), // one logical per physical block
+            BlkConfig::ALIGNMENT_OFFSET => Ok(0),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register {} unimplemented",
+                "virtio: reading config register 0x{:x}:u8 unimplemented",
                 addr
             ))),
         };
