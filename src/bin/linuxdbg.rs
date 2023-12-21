@@ -23,7 +23,7 @@ use rriscv::reg::treg;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
-use rriscv::{dt, virtio};
+use rriscv::{clint, dt, plic, virtio};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();
@@ -95,6 +95,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // virtio block device vda
     let vda = virtio::Device::new_block_device("images/rootfs.ext2");
     bus.map(vda, 0x10001000..0x10002000);
+
+    let clint = clint::Clint::new();
+    bus.map(clint, 0x2000000..0x2010000);
+
+    let plic = plic::Plic::new();
+    bus.map(plic, 0xc000000..0xc600000);
 
     let device_tree = dt::load("linux");
     let dtb_start = 0x8000;

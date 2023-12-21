@@ -72,7 +72,7 @@
 			bus-range = <0x00 0xff>;
 			linux,pci-domain = <0x00>;
 			device_type = "pci";
-			//compatible = "pci-host-ecam-generic";
+			compatible = "pci-host-ecam-generic";
 			#size-cells = <0x02>;
 			#interrupt-cells = <0x01>;
 			#address-cells = <0x03>;
@@ -91,7 +91,7 @@
 			reg = <0x00 0xc000000 0x00 0x600000>;
 			interrupts-extended = <0x02 0x0b 0x02 0x09>;
 			interrupt-controller;
-			//compatible = "sifive,plic-1.0.0\0riscv,plic0";
+			compatible = "sifive,plic-1.0.0\0riscv,plic0";
 			#address-cells = <0x00>;
 			#interrupt-cells = <0x01>;
 		};
@@ -99,7 +99,7 @@
 		clint@2000000 {
 			interrupts-extended = <0x02 0x03 0x02 0x07>;
 			reg = <0x00 0x2000000 0x00 0x10000>;
-			//compatible = "sifive,clint0\0riscv,clint0";
+			compatible = "sifive,clint0\0riscv,clint0";
 		};
 	};
 };

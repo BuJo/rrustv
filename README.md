@@ -42,6 +42,7 @@ flowchart LR
 | DTB   | Device Tree Blob                    |
 | HTIF  | Deprecated Host Device              |
 | FESVR | RISC-V Frontend Server              |
+| CLINT | Core Local Interruptor              |
 | PLIC  | Platform-Level Interrupt Controller |
 | AMO   | Atomic Memory Operation             |
 

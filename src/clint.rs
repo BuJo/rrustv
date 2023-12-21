@@ -1,5 +1,8 @@
 use crate::csr;
 use crate::csr::Csr;
+use crate::device::Device;
+use crate::plic::Fault;
+use log::{debug, trace};
 use std::fmt::{Display, Formatter};
 
 enum PrivilegeLevel {
@@ -29,6 +32,59 @@ pub enum Interrupt {
 impl Display for Interrupt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "interrupt: {:?}", self)
+    }
+}
+
+pub struct Clint {}
+impl Clint {
+    pub fn new() -> Clint {
+        Clint {}
+    }
+}
+
+impl Device for Clint {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+        trace!("clint: writing to {} = {}", addr, val);
+        Ok(())
+    }
+
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+        trace!("clint: writing to {} = {}", addr, val);
+        Ok(())
+    }
+
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+        Err(Fault::Unimplemented(
+            "clint: writing half word unimplemented".into(),
+        ))
+    }
+
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+        Err(Fault::Unimplemented(
+            "clint: writing byte unimplemented".into(),
+        ))
+    }
+
+    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+        trace!("plic: reading from {}", addr);
+        Ok(0)
+    }
+
+    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+        trace!("plic: reading from {}", addr);
+        Ok(0)
+    }
+
+    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+        Err(Fault::Unimplemented(
+            "clint: reading half word unimplemented".into(),
+        ))
+    }
+
+    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+        Err(Fault::Unimplemented(
+            "clint: reading byte unimplemented".into(),
+        ))
     }
 }
 
