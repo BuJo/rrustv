@@ -12,7 +12,8 @@ use rriscv::reg::treg;
 use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
-use rriscv::{clint, dt, plic, virtio};
+use rriscv::{clint, dt, plic};
+use rriscv::virtio::BlkDevice;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -57,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bus.map(rom, 0x0..0x1000);
 
     // virtio block device vda
-    let vda = virtio::BlkDevice::new(disk_file, bus.clone());
+    let vda = BlkDevice::new(disk_file, bus.clone());
     bus.map(vda, 0x10001000..0x10002000);
 
     let clint = clint::Clint::new();
