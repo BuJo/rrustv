@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::sync::RwLock;
 
 use log::info;
@@ -12,7 +13,20 @@ pub struct Device {
     DeviceID: u32,
     VendorID: u32,
 
+    file: File,
+    capacity: u64,
+
     state: RwLock<State>,
+    queues: RwLock<Vec<Queue>>,
+}
+
+#[derive(Clone)]
+struct Queue {
+    ready: bool,
+    size: u32,
+    desc: u64,
+    driver: u64,
+    device: u64,
 }
 
 #[allow(non_snake_case)]
@@ -22,13 +36,7 @@ struct State {
     DriverFeaturesSel: Sel,
     DeviceFeaturesSel: Sel,
     status: u32,
-    queue_ready: bool,
-    queue_idx: u32,
-    queue_size: u32,
-    queue_desc: u64,
-    queue_driver: u64,
-    queue_device: u64,
-    features: u64,
+    queue_idx: usize,
 }
 
 enum Sel {
@@ -87,6 +95,7 @@ impl Register {
 
 struct BlkFlag {}
 
+#[allow(unused)]
 impl BlkFlag {
     const SIZE_MAX: u32 = 1;
     const SEG_MAX: u32 = 2;
@@ -99,6 +108,7 @@ struct BlkConfig {}
 #[allow(unused)]
 impl BlkConfig {
     const CAPACITY: usize = 0;
+    const CAPACITY_HIGH: usize = 4;
     const SIZE_MAX: usize = 8;
     const SEG_MAX: usize = 12;
     const CYLINDERS: usize = 16;
@@ -130,15 +140,23 @@ impl BlkConfig {
 
 struct Features {}
 
+#[allow(unused)]
 impl Features {
     const VERSION_1: u32 = 32;
     const ACCESS_PLATFORM: u32 = 33;
 }
 
 impl Device {
-    pub fn new_block_device(_s: &str) -> Device {
-        //let features = (1 << (Features::VERSION_1)) | (1 << (Features::ACCESS_PLATFORM));
-        let features = (1 << (Features::VERSION_1));
+    pub fn new_block_device(s: &str) -> Device {
+        let features = (1 << (Features::VERSION_1))
+            | (1 << (BlkFlag::SIZE_MAX))
+            | (1 << (BlkFlag::SEG_MAX))
+            | (1 << (BlkFlag::RO))
+            | (1 << (BlkFlag::BLK_SIZE));
+
+        let file = File::open(s).expect("file being there");
+        let file_bytes = file.metadata().unwrap().len();
+        let capacity = (file_bytes / 512) + 1; // TODO: incorrect capacity computation
 
         Device {
             MagicValue: 0x74726976, // little endian "virt"
@@ -146,23 +164,28 @@ impl Device {
             DeviceID: 2,            // block device
             VendorID: 0x1af4,       // emulated
 
+            file,
+            capacity,
+
             state: RwLock::new(State {
                 DeviceFeatures: features,
                 DriverFeatures: 0,
                 DeviceFeaturesSel: Sel::Low,
                 DriverFeaturesSel: Sel::Low,
 
-                features: 0,
                 status: 0,
                 queue_idx: 0,
-
-                // Queue 0
-                queue_ready: false,
-                queue_size: 0,
-                queue_desc: 0,
-                queue_driver: 0,
-                queue_device: 0,
             }),
+            queues: RwLock::new(vec![
+                Queue {
+                    ready: false,
+                    size: 0,
+                    desc: 0,
+                    driver: 0,
+                    device: 0,
+                };
+                16
+            ]),
         }
     }
 }
@@ -178,6 +201,7 @@ impl D for Device {
         info!("virtio: writing 0x{:x} = {}", addr, val);
 
         let mut state = self.state.write().unwrap();
+        let mut queues = self.queues.write().unwrap();
 
         match addr {
             Register::DeviceFeaturesSel => {
@@ -201,7 +225,10 @@ impl D for Device {
                 }
                 Sel::High => {
                     state.DriverFeatures = state.DriverFeatures | ((val as u64) << 32);
-                    info!("virtio: selected driver features: {:b}", state.DriverFeatures);
+                    info!(
+                        "virtio: selected driver features: {:b}",
+                        state.DriverFeatures
+                    );
                     Ok(())
                 }
             },
@@ -236,49 +263,52 @@ impl D for Device {
             }
             Register::QueueSel => {
                 info!("virtio: selecting queue {}", val);
-                state.queue_idx = val;
+                state.queue_idx = val as usize;
                 Ok(())
             }
             Register::QueueReady => {
                 info!(
                     "virtio: queue {}: setting ready: {}",
                     state.queue_idx,
-                    val != 00
+                    val != 0
                 );
-                state.queue_ready = val != 0;
+                queues[state.queue_idx].ready = val != 0;
                 Ok(())
             }
             Register::QueueSize => {
                 info!("virtio: queue {}: setting size: {}", state.queue_idx, val);
-                state.queue_size = val;
+                queues[state.queue_idx].size = val;
                 Ok(())
             }
             Register::QueueDescLow => {
-                state.queue_desc = val as u64;
+                queues[state.queue_idx].desc = val as u64;
                 Ok(())
             }
             Register::QueueDescHigh => {
+                queues[state.queue_idx].desc = ((val as u64) << 32) | queues[state.queue_idx].desc;
+
                 info!(
                     "virtio: queue {}: setting descriptor area: {}",
-                    state.queue_idx, val
+                    state.queue_idx, queues[state.queue_idx].desc
                 );
-                state.queue_desc = ((val as u64) << 32) | state.queue_desc;
                 Ok(())
             }
             Register::QueueDriverLow => {
-                state.queue_driver = val as u64;
+                queues[state.queue_idx].driver = val as u64;
                 Ok(())
             }
             Register::QueueDriverHigh => {
+                queues[state.queue_idx].driver =
+                    ((val as u64) << 32) | queues[state.queue_idx].desc;
+
                 info!(
                     "virtio: queue {}: setting driver area: {}",
-                    state.queue_idx, val
+                    state.queue_idx, queues[state.queue_idx].driver
                 );
-                state.queue_driver = ((val as u64) << 32) | state.queue_desc;
                 Ok(())
             }
             Register::QueueDeviceLow => {
-                state.queue_device = val as u64;
+                queues[state.queue_idx].device = val as u64;
                 Ok(())
             }
             Register::QueueDeviceHigh => {
@@ -286,7 +316,8 @@ impl D for Device {
                     "virtio: queue {}: setting device area: {}",
                     state.queue_idx, val
                 );
-                state.queue_device = ((val as u64) << 32) | state.queue_desc;
+                queues[state.queue_idx].device =
+                    ((val as u64) << 32) | queues[state.queue_idx].desc;
                 Ok(())
             }
             _ => Err(Fault::Unimplemented(format!(
@@ -325,6 +356,7 @@ impl D for Device {
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         let state = self.state.read().unwrap();
+        let queues = self.queues.write().unwrap();
 
         let res = match addr {
             Register::MagicValue => Ok(self.MagicValue),
@@ -343,6 +375,8 @@ impl D for Device {
             _ if addr >= 0x100 => {
                 let addr = addr - 0x100;
                 match addr {
+                    BlkConfig::CAPACITY => Ok((self.capacity & 0xFFFFFFFF) as u32),
+                    BlkConfig::CAPACITY_HIGH => Ok((self.capacity >> 32) as u32),
                     BlkConfig::SIZE_MAX => Ok(512),
                     BlkConfig::SEG_MAX => Ok(1),
                     BlkConfig::BLK_SIZE => Ok(512),
@@ -368,8 +402,8 @@ impl D for Device {
                 }
             }
             Register::ConfigGeneration => Ok(0xdeadbeef),
-            Register::QueueReady => Ok(state.queue_ready as u32),
-            Register::QueueSizeMax => Ok(1),
+            Register::QueueReady => Ok(queues[state.queue_idx].ready as u32),
+            Register::QueueSizeMax => Ok(queues.capacity() as u32),
             _ => Err(Fault::Unimplemented(format!(
                 "virtio: reading register 0x{:x} unimplemented",
                 addr

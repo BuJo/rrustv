@@ -9,7 +9,7 @@ use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWin
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
 use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::RollingFileAppender;
-use log4rs::config::{Appender, Logger, Root};
+use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config;
@@ -56,6 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
+    let disk_file = args.get(2).expect("expect disc file");
 
     let bin_data = fs::read(image_file).expect("file");
     let elf = object::File::parse(&*bin_data).expect("parsing");
@@ -93,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bus.map(rom, 0x0..0x1000);
 
     // virtio block device vda
-    let vda = virtio::Device::new_block_device("images/rootfs.ext2");
+    let vda = virtio::Device::new_block_device(disk_file);
     bus.map(vda, 0x10001000..0x10002000);
 
     let clint = clint::Clint::new();

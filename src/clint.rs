@@ -2,9 +2,10 @@ use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
 use crate::plic::Fault;
-use log::{debug, trace};
+use log::trace;
 use std::fmt::{Display, Formatter};
 
+#[allow(unused)]
 enum PrivilegeLevel {
     M,
     S,
@@ -53,13 +54,13 @@ impl Device for Clint {
         Ok(())
     }
 
-    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
             "clint: writing half word unimplemented".into(),
         ))
     }
 
-    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
             "clint: writing byte unimplemented".into(),
         ))
@@ -75,13 +76,13 @@ impl Device for Clint {
         Ok(0)
     }
 
-    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+    fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
         Err(Fault::Unimplemented(
             "clint: reading half word unimplemented".into(),
         ))
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
         Err(Fault::Unimplemented(
             "clint: reading byte unimplemented".into(),
         ))

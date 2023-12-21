@@ -1,13 +1,12 @@
-use log::error;
 use std::ops::Range;
 use std::sync::Arc;
 use std::{env, fs};
 
+use log::error;
 use object::{Object, ObjectSection};
 
 use rriscv::dynbus::DynBus;
 use rriscv::hart::Hart;
-use rriscv::plic::Fault;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
 use rriscv::rom::Rom;
@@ -20,6 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
+    let disk_file = args.get(2).expect("expect disc file");
 
     let bin_data = fs::read(image_file).expect("file");
     let elf = object::File::parse(&*bin_data).expect("parsing");
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bus.map(rom, 0x0..0x1000);
 
     // virtio block device vda
-    let vda = virtio::Device::new_block_device("images/rootfs.ext2");
+    let vda = virtio::Device::new_block_device(disk_file);
     bus.map(vda, 0x10001000..0x10002000);
 
     let clint = clint::Clint::new();

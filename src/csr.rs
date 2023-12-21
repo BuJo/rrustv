@@ -1,5 +1,3 @@
-use log::trace;
-
 const XLEN: u64 = 32;
 
 pub const NUM_CSRS: usize = 4096;
