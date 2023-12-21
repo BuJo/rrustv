@@ -1,32 +1,54 @@
+use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use log::info;
 
-use crate::device::Device as D;
+use crate::device::Device;
+use crate::dynbus::DynBus;
 use crate::plic::Fault;
-
-#[allow(non_snake_case)]
-pub struct Device {
-    MagicValue: u32, // R
-    Version: u32,    // R
-    DeviceID: u32,
-    VendorID: u32,
-
-    file: File,
-    capacity: u64,
-
-    state: RwLock<State>,
-    queues: RwLock<Vec<Queue>>,
-}
 
 #[derive(Clone)]
 struct Queue {
     ready: bool,
     size: u32,
-    desc: u64,
-    driver: u64,
-    device: u64,
+    desc: usize,
+    driver: usize,
+    device: usize,
+}
+
+#[derive(Debug)]
+struct VirtqDesc {
+    addr: usize,
+    len: u32,
+    flags: u16,
+    next: u16,
+}
+
+impl VirtqDesc {
+    const NEXT: u16 = 1;
+    const WRITE: u16 = 2;
+    const INDIRECT: u16 = 4;
+}
+
+impl Display for VirtqDesc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut flags = vec![];
+        if self.flags & VirtqDesc::NEXT > 0 {
+            flags.push("next");
+        }
+        if self.flags & VirtqDesc::WRITE > 0 {
+            flags.push("write");
+        }
+        if self.flags & VirtqDesc::INDIRECT > 0 {
+            flags.push("indirect");
+        }
+        write!(
+            f,
+            "virtq[0x{:x} 0x{:x}] {:?} -> {}",
+            self.addr, self.len, flags, self.next
+        )
+    }
 }
 
 #[allow(non_snake_case)]
@@ -93,6 +115,29 @@ impl Register {
     const Config: usize = 0x100;
 }
 
+struct Features {}
+
+#[allow(unused)]
+impl Features {
+    const VERSION_1: u32 = 32;
+    const ACCESS_PLATFORM: u32 = 33;
+}
+
+#[allow(non_snake_case)]
+pub struct BlkDevice {
+    MagicValue: u32, // R
+    Version: u32,    // R
+    DeviceID: u32,
+    VendorID: u32,
+
+    bus: Arc<DynBus>,
+    file: File,
+    capacity: u64,
+
+    state: RwLock<State>,
+    queues: RwLock<Vec<Queue>>,
+}
+
 struct BlkFlag {}
 
 #[allow(unused)]
@@ -138,16 +183,8 @@ impl BlkConfig {
     const MODEL: usize = 92;
 }
 
-struct Features {}
-
-#[allow(unused)]
-impl Features {
-    const VERSION_1: u32 = 32;
-    const ACCESS_PLATFORM: u32 = 33;
-}
-
-impl Device {
-    pub fn new_block_device(s: &str) -> Device {
+impl BlkDevice {
+    pub fn new(s: &str, bus: Arc<DynBus>) -> BlkDevice {
         let features = (1 << (Features::VERSION_1))
             | (1 << (BlkFlag::SIZE_MAX))
             | (1 << (BlkFlag::SEG_MAX))
@@ -158,12 +195,13 @@ impl Device {
         let file_bytes = file.metadata().unwrap().len();
         let capacity = (file_bytes / 512) + 1; // TODO: incorrect capacity computation
 
-        Device {
+        BlkDevice {
             MagicValue: 0x74726976, // little endian "virt"
             Version: 0x2,           // non-legacy virtio version
             DeviceID: 2,            // block device
             VendorID: 0x1af4,       // emulated
 
+            bus,
             file,
             capacity,
 
@@ -190,7 +228,7 @@ impl Device {
     }
 }
 
-impl D for Device {
+impl Device for BlkDevice {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
             "virtio: writing double unimplemented".into(),
@@ -281,43 +319,52 @@ impl D for Device {
                 Ok(())
             }
             Register::QueueDescLow => {
-                queues[state.queue_idx].desc = val as u64;
+                queues[state.queue_idx].desc = val as usize;
                 Ok(())
             }
             Register::QueueDescHigh => {
-                queues[state.queue_idx].desc = ((val as u64) << 32) | queues[state.queue_idx].desc;
+                queues[state.queue_idx].desc =
+                    ((val as usize) << 32) | queues[state.queue_idx].desc;
+                let addr = queues[state.queue_idx].desc;
+
+                let desc = VirtqDesc {
+                    addr: self.bus.read_double(addr).unwrap() as usize,
+                    len: self.bus.read_word(addr + 8).unwrap(),
+                    flags: self.bus.read_half(addr + 12).unwrap(),
+                    next: self.bus.read_half(addr + 14).unwrap(),
+                };
 
                 info!(
-                    "virtio: queue {}: setting descriptor area: {}",
-                    state.queue_idx, queues[state.queue_idx].desc
+                    "virtio: queue {}: setting descriptor area: 0x{:x}: {}",
+                    state.queue_idx, addr, desc,
                 );
                 Ok(())
             }
             Register::QueueDriverLow => {
-                queues[state.queue_idx].driver = val as u64;
+                queues[state.queue_idx].driver = val as usize;
                 Ok(())
             }
             Register::QueueDriverHigh => {
                 queues[state.queue_idx].driver =
-                    ((val as u64) << 32) | queues[state.queue_idx].desc;
+                    ((val as usize) << 32) | queues[state.queue_idx].driver;
 
                 info!(
-                    "virtio: queue {}: setting driver area: {}",
+                    "virtio: queue {}: setting driver area: 0x{:x}",
                     state.queue_idx, queues[state.queue_idx].driver
                 );
                 Ok(())
             }
             Register::QueueDeviceLow => {
-                queues[state.queue_idx].device = val as u64;
+                queues[state.queue_idx].device = val as usize;
                 Ok(())
             }
             Register::QueueDeviceHigh => {
                 info!(
-                    "virtio: queue {}: setting device area: {}",
+                    "virtio: queue {}: setting device area: 0x{:x}",
                     state.queue_idx, val
                 );
                 queues[state.queue_idx].device =
-                    ((val as u64) << 32) | queues[state.queue_idx].desc;
+                    ((val as usize) << 32) | queues[state.queue_idx].device;
                 Ok(())
             }
             _ => Err(Fault::Unimplemented(format!(

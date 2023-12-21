@@ -24,7 +24,7 @@ impl DynBus {
         }
     }
 
-    pub fn map(&mut self, device: impl Device + 'static, range: Range<usize>) {
+    pub fn map(&self, device: impl Device + 'static, range: Range<usize>) {
         let mut devices = self.devices.write().unwrap();
 
         devices.push((range, Box::new(device)));
@@ -142,7 +142,7 @@ mod test {
     #[test]
     fn ram() {
         let ram = Ram::new();
-        let mut bus = DynBus::new();
+        let bus = DynBus::new();
         bus.map(ram, 0..0x2000);
 
         let err = bus.write_word(0x0, 0x0);
@@ -152,7 +152,7 @@ mod test {
     #[test]
     fn htif() {
         let htif = Htif::new();
-        let mut bus = DynBus::new();
+        let bus = DynBus::new();
         bus.map(htif, 0..50);
 
         let err = bus.write_word(0x0, 0x0);

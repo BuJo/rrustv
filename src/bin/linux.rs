@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bin_data = fs::read(image_file).expect("file");
     let elf = object::File::parse(&*bin_data).expect("parsing");
 
-    let mut bus = DynBus::new();
+    let bus = Arc::new(DynBus::new());
     let ram = Ram::new();
     let pc = elf.entry() as usize;
 
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bus.map(rom, 0x0..0x1000);
 
     // virtio block device vda
-    let vda = virtio::Device::new_block_device(disk_file);
+    let vda = virtio::BlkDevice::new(disk_file, bus.clone());
     bus.map(vda, 0x10001000..0x10002000);
 
     let clint = clint::Clint::new();
@@ -71,8 +71,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dtb_end = dtb_start + device_tree.len();
     let dtb = Rom::new(device_tree);
     bus.map(dtb, 0x8000..dtb_end);
-
-    let bus = Arc::new(bus);
 
     let mut hart = Hart::new(0, pc, bus.clone());
 
