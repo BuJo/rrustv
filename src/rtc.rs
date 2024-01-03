@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 use crate::device::Device;
 use crate::plic::Fault;
 
-pub const MTIMECMP_ADDR: usize = 0x4000;
-pub const MTIMECMP_ADDRH: usize = 0x4004;
-pub const MTIME_ADDR: usize = 0x4008;
-pub const MTIME_ADDRH: usize = 0x400c;
+pub const MTIMECMP_ADDR: usize = 0x0;
+pub const MTIMECMP_ADDRH: usize = 0x4;
+pub const MTIME_ADDR: usize = 0x8;
+pub const MTIME_ADDRH: usize = 0xc;
 
 pub struct Rtc {
     start: Instant,
