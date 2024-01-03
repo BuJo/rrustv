@@ -1,9 +1,19 @@
-use crate::csr;
+use std::fmt::{Display, Formatter};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use log::trace;
+
 use crate::csr::Csr;
 use crate::device::Device;
+use crate::dynbus::DynBus;
 use crate::plic::Fault;
-use log::trace;
-use std::fmt::{Display, Formatter};
+use crate::{csr, rtc};
+
+pub const MSIP_HART0_ADDR: usize = 0x0;
+pub const MTIME_ADDR: usize = 0xbff8;
+pub const MTIME_ADDRH: usize = 0xbffc;
+pub const MTIMECMP_ADDR: usize = 0x4000;
 
 #[allow(unused)]
 enum PrivilegeLevel {
@@ -36,55 +46,88 @@ impl Display for Interrupt {
     }
 }
 
-pub struct Clint {}
+pub struct Clint {
+    bus: Arc<DynBus>,
+    rtc_addr: usize,
+    msip: AtomicBool, // XXX: only one hart
+}
+
 impl Clint {
-    pub fn new() -> Clint {
-        Clint {}
+    pub fn new(bus: Arc<DynBus>, rtc_addr: usize) -> Clint {
+        Clint {
+            bus,
+            rtc_addr,
+            msip: AtomicBool::new(false),
+        }
     }
 }
 
 impl Device for Clint {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
-        trace!("clint: writing to {} = {}", addr, val);
-        Ok(())
+        match addr {
+            MTIMECMP_ADDR => self
+                .bus
+                .write_double(self.rtc_addr + rtc::MTIMECMP_ADDR, val),
+            _ => {
+                trace!("writing double word to 0x{:x} = {}", addr, val);
+                Ok(())
+            }
+        }
     }
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
-        trace!("clint: writing to {} = {}", addr, val);
-        Ok(())
+        match addr {
+            MSIP_HART0_ADDR => Ok(self.msip.store(val > 0, Ordering::Relaxed)),
+            _ => {
+                trace!("writing word to 0x{:x} = {}", addr, val);
+                Ok(())
+            }
+        }
     }
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
-            "clint: writing half word unimplemented".into(),
+            "writing half word unimplemented".into(),
         ))
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
-            "clint: writing byte unimplemented".into(),
+            "writing byte unimplemented".into(),
         ))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {
-        trace!("plic: reading from {}", addr);
-        Ok(0)
+        match addr {
+            MTIME_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIME_ADDR),
+            _ => {
+                trace!("reading double word from 0x{:x}", addr);
+                Ok(0)
+            }
+        }
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
-        trace!("plic: reading from {}", addr);
-        Ok(0)
+        match addr {
+            MSIP_HART0_ADDR => Ok(self.msip.load(Ordering::Relaxed) as u32),
+            MTIME_ADDR => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDR),
+            MTIME_ADDRH => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDRH),
+            _ => {
+                trace!("reading word from 0x{:x}", addr);
+                Ok(0)
+            }
+        }
     }
 
     fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
         Err(Fault::Unimplemented(
-            "clint: reading half word unimplemented".into(),
+            "reading half word unimplemented".into(),
         ))
     }
 
     fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
         Err(Fault::Unimplemented(
-            "clint: reading byte unimplemented".into(),
+            "reading byte unimplemented".into(),
         ))
     }
 }
