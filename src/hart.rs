@@ -55,7 +55,7 @@ impl<BT: Device> Hart<BT> {
             return Err(Halt);
         }
 
-        if let Some(irq) = clint::interrupt(&self.csr) {
+        if let Some(irq) = clint::interrupt(&self) {
             warn!("skipping interrupt: {}", irq);
         }
 
@@ -90,6 +90,10 @@ impl<BT: Device> Hart<BT> {
             0..=31 => self.registers[reg as usize],
             _ => panic!(),
         }
+    }
+
+    pub fn get_csr(&self, csr: usize) -> u64 {
+        self.csr.read(csr)
     }
 
     pub fn set_csr(&mut self, csr: usize, val: u64) {

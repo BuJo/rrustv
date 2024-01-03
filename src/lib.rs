@@ -1,3 +1,5 @@
+#![feature(exclusive_range_pattern)]
+
 pub mod bus;
 pub mod clint;
 pub mod csr;

@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use log::trace;
 
-use crate::csr::Csr;
 use crate::device::Device;
 use crate::dynbus::DynBus;
+use crate::hart::Hart;
 use crate::plic::Fault;
 use crate::{csr, rtc};
 
 pub const MSIP_HART0_ADDR: usize = 0x0;
+pub const MSIP_HART4095_ADDR: usize = 0x3FFC;
 pub const MTIME_ADDR: usize = 0xbff8;
 pub const MTIME_ADDRH: usize = 0xbffc;
 pub const MTIMECMP_ADDR: usize = 0x4000;
@@ -77,7 +78,13 @@ impl Device for Clint {
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
-            MSIP_HART0_ADDR => Ok(self.msip.store(val > 0, Ordering::Relaxed)),
+            MSIP_HART0_ADDR..MSIP_HART4095_ADDR => {
+                let hartid = (addr - MSIP_HART0_ADDR) / 4;
+                if val > 0 {
+                    trace!("interrupting hart {} via MIP", hartid);
+                }
+                Ok(self.msip.store(val > 0, Ordering::Relaxed))
+            }
             _ => {
                 trace!("writing word to 0x{:x} = {}", addr, val);
                 Ok(())
@@ -107,7 +114,11 @@ impl Device for Clint {
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         match addr {
-            MSIP_HART0_ADDR => Ok(self.msip.load(Ordering::Relaxed) as u32),
+            MSIP_HART0_ADDR..MSIP_HART4095_ADDR => {
+                let hartid = (addr - MSIP_HART0_ADDR) / 4;
+                trace!("checking if hart {} interrupted via MIP", hartid);
+                Ok(self.msip.load(Ordering::Relaxed) as u32)
+            }
             MTIME_ADDR => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDR),
             MTIME_ADDRH => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDRH),
             _ => {
@@ -167,9 +178,9 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<Interrupt> {
     None
 }
 
-pub(crate) fn interrupt(csr: &Csr) -> Option<Interrupt> {
+pub(crate) fn interrupt<BT: Device>(hart: &Hart<BT>) -> Option<Interrupt> {
     let mode = PrivilegeLevel::M;
-    let mstatus = csr.read(csr::MSTATUS);
+    let mstatus = hart.get_csr(csr::MSTATUS);
 
     let enabled = match mode {
         PrivilegeLevel::M => mstatus & 0b0001 > 0,
@@ -181,10 +192,11 @@ pub(crate) fn interrupt(csr: &Csr) -> Option<Interrupt> {
         return None;
     }
 
-    let mip = csr.read(csr::MIP);
-    let mie = csr.read(csr::MIE);
+    let msip = hart.bus.read_word(0x2000000 + MSIP_HART0_ADDR).expect(".") as u64; // XXX: bad.
+    let mip = hart.get_csr(csr::MIP);
+    let mie = hart.get_csr(csr::MIE);
 
-    let pending = pending_interrupt(mip, mie);
+    let pending = pending_interrupt(mip | msip, mie);
 
     pending
 }
