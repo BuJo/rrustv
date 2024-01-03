@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 pub use self::blk::BlkDevice;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Queue {
     ready: bool,
     size: u32,

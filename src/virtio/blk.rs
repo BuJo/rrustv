@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::sync::{Arc, RwLock};
 
-use log::info;
+use log::{info, trace};
 
 use crate::device::Device;
 use crate::dynbus::DynBus;
@@ -116,12 +116,12 @@ impl BlkDevice {
 impl Device for BlkDevice {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
-            "virtio: writing double unimplemented".into(),
+            "writing double unimplemented".into(),
         ))
     }
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
-        info!("virtio: writing 0x{:x} = {}", addr, val);
+        trace!("writing 0x{:x} = {}", addr, val);
 
         let mut state = self.state.write().unwrap();
         let mut queues = self.queues.write().unwrap();
@@ -149,7 +149,7 @@ impl Device for BlkDevice {
                 Sel::High => {
                     state.DriverFeatures = state.DriverFeatures | ((val as u64) << 32);
                     info!(
-                        "virtio: selected driver features: {:b}",
+                        "selected driver features: {:b}",
                         state.DriverFeatures
                     );
                     Ok(())
@@ -157,41 +157,41 @@ impl Device for BlkDevice {
             },
             Register::Status => {
                 if val == 0 {
-                    info!("virtio: initializing device");
+                    info!("initializing device");
                 }
                 if val & Status::ACKNOWLEDGE > 0 {
-                    info!("virtio: driver acked");
+                    info!("driver acked");
                     state.status |= Status::ACKNOWLEDGE;
                 }
                 if val & Status::DRIVER > 0 {
-                    info!("virtio: driver is indeed a driver");
+                    info!("driver is indeed a driver");
                     state.status |= Status::DRIVER;
                 }
                 if val & Status::FEATURES_OK > 0 {
-                    info!("virtio: driver likes the devices features");
+                    info!("driver likes the devices features");
                     state.status |= Status::FEATURES_OK;
                 }
                 if val & Status::DRIVER_OK > 0 {
-                    info!("virtio: driver likes the device");
+                    info!("driver likes the device");
                     state.status |= Status::DRIVER_OK;
                 }
                 if val & Status::DEVICE_NEEDS_RESET > 0 {
-                    info!("virtio: driver needs the device to reset");
+                    info!("driver needs the device to reset");
                     state.status = 0;
                 }
                 if val & Status::FAILED > 0 {
-                    info!("virtio: driver thinks the device is a failure");
+                    info!("driver thinks the device is a failure");
                 }
                 Ok(())
             }
             Register::QueueSel => {
-                info!("virtio: selecting queue {}", val);
+                info!("selecting queue {}", val);
                 state.queue_idx = val as usize;
                 Ok(())
             }
             Register::QueueReady => {
                 info!(
-                    "virtio: queue {}: setting ready: {}",
+                    "queue {}: setting ready: {}",
                     state.queue_idx,
                     val != 0
                 );
@@ -199,8 +199,14 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueSize => {
-                info!("virtio: queue {}: setting size: {}", state.queue_idx, val);
+                info!("queue {}: setting size: {}", state.queue_idx, val);
                 queues[state.queue_idx].size = val;
+                Ok(())
+            }
+            Register::QueueNotify => {
+                // notifies that there are new buffers set up to process in the queue
+                let idx = val;
+                info!("queue {} to process: {:?}", idx, queues[idx as usize]);
                 Ok(())
             }
             Register::QueueDescLow => {
@@ -220,7 +226,7 @@ impl Device for BlkDevice {
                 };
 
                 info!(
-                    "virtio: queue {}: setting descriptor area: 0x{:x}: {}",
+                    "queue {}: setting descriptor area: 0x{:x}: {}",
                     state.queue_idx, addr, desc,
                 );
                 Ok(())
@@ -234,7 +240,7 @@ impl Device for BlkDevice {
                     ((val as usize) << 32) | queues[state.queue_idx].driver;
 
                 info!(
-                    "virtio: queue {}: setting driver area: 0x{:x}",
+                    "queue {}: setting driver area: 0x{:x}",
                     state.queue_idx, queues[state.queue_idx].driver
                 );
                 Ok(())
@@ -245,7 +251,7 @@ impl Device for BlkDevice {
             }
             Register::QueueDeviceHigh => {
                 info!(
-                    "virtio: queue {}: setting device area: 0x{:x}",
+                    "queue {}: setting device area: 0x{:x}",
                     state.queue_idx, val
                 );
                 queues[state.queue_idx].device =
@@ -253,7 +259,7 @@ impl Device for BlkDevice {
                 Ok(())
             }
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: writing register 0x{:x} unimplemented",
+                "writing register 0x{:x} unimplemented",
                 addr
             ))),
         }
@@ -261,13 +267,13 @@ impl Device for BlkDevice {
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
-            "virtio: writing halfword unimplemented".into(),
+            "writing halfword unimplemented".into(),
         ))
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
         Err(Fault::Unimplemented(
-            "virtio: writing byte unimplemented".into(),
+            "writing byte unimplemented".into(),
         ))
     }
 
@@ -276,12 +282,10 @@ impl Device for BlkDevice {
         let res = match addr {
             BlkConfig::CAPACITY => Ok(1),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register 0x{:x} unimplemented",
+                "reading config register 0x{:x} unimplemented",
                 addr
             ))),
         };
-
-        info!("virtio: reading 0x{:x}:u64 = {:?}", addr, res);
 
         res
     }
@@ -328,7 +332,7 @@ impl Device for BlkDevice {
                     BlkConfig::WRITE_GRANULARITY => Ok(0),
                     BlkConfig::MODEL => Ok(0),
                     _ => Err(Fault::Unimplemented(format!(
-                        "virtio: reading config register 0x{:x}:u32 unimplemented",
+                        "reading config register 0x{:x}:u32 unimplemented",
                         addr
                     ))),
                 }
@@ -337,12 +341,12 @@ impl Device for BlkDevice {
             Register::QueueReady => Ok(queues[state.queue_idx].ready as u32),
             Register::QueueSizeMax => Ok(queues.capacity() as u32),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading register 0x{:x} unimplemented",
+                "reading register 0x{:x} unimplemented",
                 addr
             ))),
         };
 
-        info!("virtio: reading 0x{:x}:u32 = {:?}", addr, res);
+        trace!("reading 0x{:x}:u32 = {:?}", addr, res);
 
         res
     }
@@ -354,12 +358,12 @@ impl Device for BlkDevice {
             BlkConfig::MIN_IO_SIZE => Ok(1),
             BlkConfig::WRITE_ZEROES_MAY_UNMAP => Ok(0),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register 0x{}:u16 unimplemented",
+                "reading config register 0x{}:u16 unimplemented",
                 addr
             ))),
         };
 
-        info!("virtio: reading 0x{:x}:u16 = {:?}", addr, res);
+        info!("reading 0x{:x}:u16 = {:?}", addr, res);
 
         res
     }
@@ -373,12 +377,12 @@ impl Device for BlkDevice {
             BlkConfig::PHYSICAL_BLOCK_EXP => Ok(1), // one logical per physical block
             BlkConfig::ALIGNMENT_OFFSET => Ok(0),
             _ => Err(Fault::Unimplemented(format!(
-                "virtio: reading config register 0x{:x}:u8 unimplemented",
+                "reading config register 0x{:x}:u8 unimplemented",
                 addr
             ))),
         };
 
-        info!("virtio: reading 0x{:x}:u8 = {:?}", addr, res);
+        info!("reading 0x{:x}:u8 = {:?}", addr, res);
 
         res
     }
