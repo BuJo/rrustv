@@ -6,7 +6,7 @@ use log::{info, trace};
 use crate::device::Device;
 use crate::dynbus::DynBus;
 use crate::plic::Fault;
-use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtqDesc};
+use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtDescs, VirtqDesc};
 
 #[allow(non_snake_case)]
 pub struct BlkDevice {
@@ -16,7 +16,7 @@ pub struct BlkDevice {
     VendorID: u32,
 
     bus: Arc<DynBus>,
-    file: File,
+    _file: File,
     capacity: u64,
 
     state: RwLock<State>,
@@ -87,7 +87,7 @@ impl BlkDevice {
             VendorID: 0x1af4,       // emulated
 
             bus,
-            file,
+            _file: file,
             capacity,
 
             state: RwLock::new(State {
@@ -115,9 +115,7 @@ impl BlkDevice {
 
 impl Device for BlkDevice {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
-            "writing double unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("writing double unimplemented".into()))
     }
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
@@ -148,10 +146,7 @@ impl Device for BlkDevice {
                 }
                 Sel::High => {
                     state.DriverFeatures = state.DriverFeatures | ((val as u64) << 32);
-                    info!(
-                        "selected driver features: {:b}",
-                        state.DriverFeatures
-                    );
+                    info!("selected driver features: {:b}", state.DriverFeatures);
                     Ok(())
                 }
             },
@@ -190,11 +185,7 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueReady => {
-                info!(
-                    "queue {}: setting ready: {}",
-                    state.queue_idx,
-                    val != 0
-                );
+                info!("queue {}: setting ready: {}", state.queue_idx, val != 0);
                 queues[state.queue_idx].ready = val != 0;
                 Ok(())
             }
@@ -206,7 +197,31 @@ impl Device for BlkDevice {
             Register::QueueNotify => {
                 // notifies that there are new buffers set up to process in the queue
                 let idx = val;
-                info!("queue {} to process: {:?}", idx, queues[idx as usize]);
+                let queue = &queues[idx as usize];
+                let mut addr = queue.desc;
+
+                let mut descriptors: Vec<VirtqDesc> = vec![];
+                loop {
+                    let desc = VirtqDesc {
+                        addr: self.bus.read_double(addr).unwrap() as usize,
+                        len: self.bus.read_word(addr + 8).unwrap(),
+                        flags: self.bus.read_half(addr + 12).unwrap(),
+                        next: self.bus.read_half(addr + 14).unwrap(),
+                    };
+                    let next = desc.next as usize;
+                    descriptors.push(desc);
+                    if next == 0 {
+                        break;
+                    }
+                    addr = addr + 16 * next;
+                }
+
+                info!(
+                    "queue {} to process: {:?}: {}",
+                    idx,
+                    queue,
+                    VirtDescs(&descriptors)
+                );
                 Ok(())
             }
             Register::QueueDescLow => {
@@ -250,12 +265,12 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueDeviceHigh => {
-                info!(
-                    "queue {}: setting device area: 0x{:x}",
-                    state.queue_idx, val
-                );
                 queues[state.queue_idx].device =
                     ((val as usize) << 32) | queues[state.queue_idx].device;
+                info!(
+                    "queue {}: setting device area: 0x{:x}",
+                    state.queue_idx, queues[state.queue_idx].device
+                );
                 Ok(())
             }
             _ => Err(Fault::Unimplemented(format!(
@@ -272,9 +287,7 @@ impl Device for BlkDevice {
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {

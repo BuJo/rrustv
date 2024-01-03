@@ -1,8 +1,8 @@
-mod blk;
-
 use std::fmt::{Display, Formatter};
 
 pub use self::blk::BlkDevice;
+
+mod blk;
 
 #[derive(Clone, Debug)]
 struct Queue {
@@ -40,9 +40,28 @@ impl Display for VirtqDesc {
         }
         write!(
             f,
-            "virtq[0x{:x} 0x{:x}] {:?} -> {}",
+            "virtq[0x{:x} {}] {:?} -> {}",
             self.addr, self.len, flags, self.next
         )
+    }
+}
+
+struct VirtDescs<'a>(pub &'a Vec<VirtqDesc>);
+
+impl<'a> Display for VirtDescs<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[",).expect(".");
+        for desc in self.0 {
+            let mut flags = vec![];
+            if desc.flags & VirtqDesc::WRITE > 0 {
+                flags.push("write");
+            }
+            if desc.flags & VirtqDesc::INDIRECT > 0 {
+                flags.push("indirect");
+            }
+            write!(f, "virtq[0x{:x} {} {:?}], ", desc.addr, desc.len, flags).expect(".");
+        }
+        write!(f, "]",)
     }
 }
 
