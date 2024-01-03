@@ -1,4 +1,6 @@
+use std::cmp::min;
 use std::fs::File;
+use std::os::unix::fs::FileExt;
 use std::sync::{Arc, RwLock};
 
 use log::{info, trace};
@@ -16,8 +18,9 @@ pub struct BlkDevice {
     VendorID: u32,
 
     bus: Arc<DynBus>,
-    _file: File,
+    file: RwLock<File>,
     capacity: u64,
+    num: usize,
 
     state: RwLock<State>,
     queues: RwLock<Vec<Queue>>,
@@ -68,6 +71,31 @@ impl BlkConfig {
     const MODEL: usize = 92;
 }
 
+#[derive(Debug)]
+struct RequestHeader {
+    typ: RequestType,
+    _ioprio: u32,
+    sector_num: u64,
+}
+
+#[derive(Debug)]
+enum RequestType {
+    IN = 0,
+    OUT = 1,
+}
+
+impl TryFrom<u32> for RequestType {
+    type Error = Fault;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(RequestType::IN),
+            1 => Ok(RequestType::OUT),
+            _ => Err(Fault::Unimplemented("unknown request type".into())),
+        }
+    }
+}
+
 impl BlkDevice {
     pub fn new(s: &str, bus: Arc<DynBus>) -> BlkDevice {
         let features = (1 << (Features::VERSION_1))
@@ -76,6 +104,7 @@ impl BlkDevice {
             | (1 << (BlkFlag::RO))
             | (1 << (BlkFlag::BLK_SIZE));
 
+        let num = 16;
         let file = File::open(s).expect("file being there");
         let file_bytes = file.metadata().unwrap().len();
         let capacity = (file_bytes / 512) + 1; // TODO: incorrect capacity computation
@@ -86,9 +115,11 @@ impl BlkDevice {
             DeviceID: 2,            // block device
             VendorID: 0x1af4,       // emulated
 
+            file: RwLock::new(file),
+
             bus,
-            _file: file,
             capacity,
+            num,
 
             state: RwLock::new(State {
                 DeviceFeatures: features,
@@ -107,9 +138,86 @@ impl BlkDevice {
                     driver: 0,
                     device: 0,
                 };
-                16
+                num
             ]),
         }
+    }
+
+    fn get_desc_rw_size(&self, queue: &Queue, mut desc_idx: u16) -> (u32, u32) {
+        let mut read_size = 0;
+        let mut write_size = 0;
+
+        loop {
+            let desc = self.get_desc(queue, desc_idx);
+
+            if desc.flags & VirtqDesc::WRITE > 0 {
+                write_size += desc.len;
+            } else {
+                read_size += desc.len;
+            }
+
+            if desc.flags & VirtqDesc::NEXT > 0 {
+                break;
+            }
+            desc_idx = desc.next;
+        }
+
+        (read_size, write_size)
+    }
+
+    fn recv_request(&self, queue: &Queue, desc_idx: u16, read_size: u32, write_size: u32) {
+        let desc = self.get_desc(queue, desc_idx);
+        let offset = 0;
+
+        if desc.flags & VirtqDesc::WRITE > 0 {
+            let len = min(write_size, desc.len);
+            info!(
+                "queue writing thing 0x{:x} len {}",
+                desc.addr + offset,
+                len as usize
+            );
+        } else {
+            let len = min(read_size, desc.len);
+            let addr = desc.addr + offset;
+
+            let h = RequestHeader {
+                typ: RequestType::try_from(self.bus.read_word(addr + 0).unwrap()).unwrap(),
+                _ioprio: self.bus.read_word(addr + 4).unwrap(),
+                sector_num: self.bus.read_double(addr + 8).unwrap(),
+            };
+            info!(
+                "request header says 0x{:x} len {}: {:?}",
+                addr, len as usize, h
+            );
+
+            match h.typ {
+                RequestType::IN => {
+                    let file = self.file.write().unwrap();
+                    let mut space = vec![0; read_size as usize];
+                    file.read_exact_at(&mut space, h.sector_num * 512).unwrap();
+                    info!(
+                        "read sector {} (byte offset {}) len {} from block device",
+                        h.sector_num,
+                        h.sector_num * 512,
+                        read_size
+                    );
+                }
+                RequestType::OUT => {
+                    info!("writing sector {} from block device", h.sector_num);
+                }
+            }
+        }
+    }
+
+    fn get_desc(&self, queue: &Queue, desc_idx: u16) -> VirtqDesc {
+        let addr = queue.desc + 16 * desc_idx as usize;
+        let desc = VirtqDesc {
+            addr: self.bus.read_double(addr).unwrap() as usize,
+            len: self.bus.read_word(addr + 8).unwrap(),
+            flags: self.bus.read_half(addr + 12).unwrap(),
+            next: self.bus.read_half(addr + 14).unwrap(),
+        };
+        desc
     }
 }
 
@@ -252,6 +360,20 @@ impl Device for BlkDevice {
                     "queue {} used: {} 0b{:016b}: {:?}",
                     idx, bflags, bidx, ring_contents
                 );
+
+                let last_avail_idx = 0;
+                let avail_idx = self.bus.read_half(queue.driver + 2).unwrap();
+                let desc_idx = self
+                    .bus
+                    .read_half(queue.driver + 4 + (last_avail_idx & (self.num - 1)) * 2)
+                    .unwrap();
+                let (read_size, write_size) = self.get_desc_rw_size(queue, desc_idx);
+                info!(
+                    "queue {} ({}->{}) read: {} bytes, write {} bytes",
+                    idx, last_avail_idx, avail_idx, read_size, write_size
+                );
+
+                self.recv_request(queue, desc_idx, read_size, write_size);
 
                 Ok(())
             }
