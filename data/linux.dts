@@ -7,7 +7,7 @@
 	model = "riscv-virtio,qemu";
 
 	chosen {
-		bootargs = "root=/dev/vda ro earlycon=uart8250,mmio,0x10000000,115200n8 console=ttyS0";
+		bootargs = "root=/dev/vda ro";
 		stdout-path = "/soc/serial@10000000";
 	};
 
@@ -35,10 +35,7 @@
 			reg = <0x00>;
 			status = "okay";
 			compatible = "riscv";
-			riscv,cboz-block-size = <0x40>;
-			riscv,cbom-block-size = <0x40>;
-			riscv,isa = "rv64imafdch_zicbom_zicboz_zicsr_zifencei_zihintpause_zawrs_zba_zbb_zbc_zbs_sstc_svadu";
-			mmu-type = "riscv,sv57";
+			riscv,isa = "rv64im";
 
 			interrupt-controller {
 				#interrupt-cells = <0x01>;
