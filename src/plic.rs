@@ -34,13 +34,9 @@ impl Device for Plic {
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
         match addr {
-            0x0..=0x000FFC => {}, //trace!("setting interrupt priority: {} -> {}", addr, val),
+            0x0..=0x000FFC => {} //trace!("setting interrupt priority: {} -> {}", addr, val),
             0x001000..=0x00107C => {
-                trace!(
-                    "setting interrupt bits pending: {} -> {:b}",
-                    addr,
-                    val
-                )
+                trace!("setting interrupt bits pending: {} -> {:b}", addr, val)
             }
             0x002000..=0x1F1FFC => {
                 // setting interrupt bits to enabled
@@ -77,9 +73,7 @@ impl Device for Plic {
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {
@@ -88,11 +82,9 @@ impl Device for Plic {
 
     fn read_word(&self, addr: usize) -> Result<u32, Fault> {
         match addr {
-            0x000000..=0x000FFC => trace!(
-                "reading interrupt source priority: {} -> {:b}",
-                addr / 4,
-                0
-            ),
+            0x000000..=0x000FFC => {
+                trace!("reading interrupt source priority: {} -> {:b}", addr / 4, 0)
+            }
             0x002000..=0x1F1FFC => {
                 // checking if interrupt bits are enabled
                 let bits = self.interrupt_bits.read().unwrap();
@@ -103,11 +95,7 @@ impl Device for Plic {
             }
             0x200000..=0x3FFF000 if addr & 0b111 == 0 => {
                 let ctx = (addr / 4096) - (0x200000 / 4096);
-                trace!(
-                    "reading priority threshold for context: {} -> {}",
-                    ctx,
-                    0
-                );
+                trace!("reading priority threshold for context: {} -> {}", ctx, 0);
             }
             0x200000..=0x3FFF000 if addr & 0b111 == 0x4 => {
                 let ctx = ((addr - 0x4) / 4096) - (0x200000 / 4096);
@@ -125,8 +113,6 @@ impl Device for Plic {
     }
 
     fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Fault::Unimplemented(
-            "reading byte unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("reading byte unimplemented".into()))
     }
 }

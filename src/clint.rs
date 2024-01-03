@@ -92,9 +92,7 @@ impl Device for Clint {
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Fault> {
@@ -126,9 +124,7 @@ impl Device for Clint {
     }
 
     fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Fault::Unimplemented(
-            "reading byte unimplemented".into(),
-        ))
+        Err(Fault::Unimplemented("reading byte unimplemented".into()))
     }
 }
 
