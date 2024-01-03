@@ -222,6 +222,37 @@ impl Device for BlkDevice {
                     queue,
                     VirtDescs(&descriptors)
                 );
+
+                // Avail == driver queue.  Device must only read.
+                let baddr = queue.driver;
+                let bflags = self.bus.read_half(baddr).unwrap();
+                let bidx = self.bus.read_half(baddr + 2).unwrap();
+                let mut ring_contents = vec![];
+                for i in 0..queue.size {
+                    let ring = self.bus.read_half(baddr + 4 + (i as usize)).unwrap();
+                    ring_contents.push(ring);
+                }
+
+                info!(
+                    "queue {} avail: {} 0b{:016b}: {:?}",
+                    idx, bflags, bidx, ring_contents
+                );
+
+                // Used == device queue.  Device can write.
+                let baddr = queue.device;
+                let bflags = self.bus.read_half(baddr).unwrap();
+                let bidx = self.bus.read_half(baddr + 2).unwrap();
+                let mut ring_contents = vec![];
+                for i in 0..queue.size {
+                    let ring = self.bus.read_half(baddr + 4 + (i as usize)).unwrap();
+                    ring_contents.push(ring);
+                }
+
+                info!(
+                    "queue {} used: {} 0b{:016b}: {:?}",
+                    idx, bflags, bidx, ring_contents
+                );
+
                 Ok(())
             }
             Register::QueueDescLow => {
