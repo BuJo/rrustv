@@ -1,3 +1,5 @@
+use log::trace;
+
 const XLEN: u64 = 32;
 
 pub const NUM_CSRS: usize = 4096;
@@ -102,7 +104,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (MEDELEG, "medeleg", Csr::read_any, Csr::write_any),
     (0x303, "mideleg", Csr::read_any, Csr::write_any),
     (MIE, "mie", Csr::read_any, Csr::write_any),
-    (MTVEC, "mtvec", Csr::read_mtvec, Csr::write_any),
+    (MTVEC, "mtvec", Csr::read_any, Csr::write_mtvec),
     (0x306, "mcounteren", Csr::read_any, Csr::write_any),
     (0x310, "mstatush", Csr::read_any, Csr::write_any),
     // Machine Trap Handling
@@ -241,8 +243,7 @@ impl Csr {
     }
 
     // WARL
-    fn read_mtvec(&self, csr: usize) -> u64 {
-        let val = &self.csrs[csr];
+    fn write_mtvec(&mut self, csr: usize, val: u64) {
         let base = val >> 2;
         let mode = val & 0b11;
 
@@ -252,15 +253,10 @@ impl Csr {
         // legality: base must be aligned to 4 byte boundary
         let base = (base >> 2) << 2;
 
-        let legal_val = (base << 2) | mode;
+        let mtvec = (base << 2) | mode;
 
-        // trace!(
-        //     "r csr {}[{:x}]->[{:x}]",
-        //     Csr::name(csr),
-        //     self.csrs[csr],
-        //     legal_val
-        // );
+        trace!("setting MTVEC [{:x}]->[{:x}]", self.csrs[csr], mtvec);
 
-        legal_val
+        self.write_any(csr, mtvec)
     }
 }

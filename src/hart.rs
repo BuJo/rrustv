@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use log::{debug, trace, warn};
 
+use crate::bus::DynBus;
 use crate::clint;
 use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
-use crate::bus::DynBus;
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
 use crate::irq::Interrupt;
@@ -56,7 +56,7 @@ impl Hart {
             return Err(Halt);
         }
 
-        if let Some(irq) = clint::interrupt(&self) {
+        if let Some(irq) = clint::interrupt(self) {
             warn!("skipping interrupt: {}", irq);
         }
 

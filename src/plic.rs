@@ -15,6 +15,13 @@ impl Plic {
         }
     }
 }
+
+impl Default for Plic {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Device for Plic {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         trace!("writing double word to 0x{:x} = {}", addr, val);
@@ -79,7 +86,7 @@ impl Device for Plic {
             0x002000..=0x1F1FFC => {
                 // checking if interrupt bits are enabled
                 let bits = self.interrupt_bits.read().unwrap();
-                let bits = bits.get(&addr).map(|&r| r).unwrap_or(0);
+                let bits = bits.get(&addr).copied().unwrap_or(0);
 
                 //trace!("reading interrupt bits enabled: {} -> {:b}", addr, bits);
                 return Ok(bits);

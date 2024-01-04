@@ -1,10 +1,10 @@
 #![feature(exclusive_range_pattern)]
 
+pub mod bus;
 pub mod clint;
 pub mod csr;
 pub mod device;
 pub mod dt;
-pub mod bus;
 pub mod gdb;
 pub mod hart;
 pub mod htif;

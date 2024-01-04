@@ -127,8 +127,8 @@ impl Device for DynBus {
 
 #[cfg(test)]
 mod test {
-    use crate::device::Device;
     use crate::bus::DynBus;
+    use crate::device::Device;
     use crate::htif::Htif;
     use crate::ram::Ram;
 

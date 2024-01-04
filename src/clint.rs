@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use log::trace;
 
-use crate::device::Device;
 use crate::bus::DynBus;
+use crate::device::Device;
 use crate::hart::Hart;
 use crate::irq::Interrupt;
 use crate::{csr, rtc};
@@ -83,7 +83,8 @@ impl Device for Clint {
                 if val > 0 {
                     trace!("interrupting hart {} via MIP", hartid);
                 }
-                Ok(self.msip.store(val > 0, Ordering::Relaxed))
+                self.msip.store(val > 0, Ordering::Relaxed);
+                Ok(())
             }
             _ => {
                 trace!("writing word to 0x{:x} = {}", addr, val);
@@ -200,7 +201,5 @@ pub(crate) fn interrupt(hart: &Hart) -> Option<InterruptType> {
     let mip = hart.get_csr(csr::MIP);
     let mie = hart.get_csr(csr::MIE);
 
-    let pending = pending_interrupt(mip | msip, mie);
-
-    pending
+    pending_interrupt(mip | msip, mie)
 }

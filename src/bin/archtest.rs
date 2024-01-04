@@ -7,8 +7,8 @@ use std::{env, fs};
 use log::{info, warn};
 use object::{Object, ObjectSection, ObjectSymbol};
 
-use rriscv::device::Device;
 use rriscv::bus::DynBus;
+use rriscv::device::Device;
 use rriscv::hart::Hart;
 use rriscv::htif::Htif;
 use rriscv::ram::Ram;

@@ -1,9 +1,10 @@
-use log::{debug, info};
 use std::sync::Arc;
 use std::thread;
 use std::{env, fs};
 
-use rriscv::bus::Bus;
+use log::{debug, info};
+
+use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::rom::Rom;
@@ -16,10 +17,15 @@ fn main() {
 
     let text = fs::read("target/target.text").expect("no .text");
 
-    let rom = Rom::new(text);
-    let ram = Ram::new();
+    let bus = DynBus::new();
 
-    let bus = Arc::new(Bus::new(rom, ram));
+    let rom = Rom::new(text);
+    bus.map(rom, 0x0..0x1FF);
+
+    let ram = Ram::new();
+    bus.map(ram, 0x80000000..0x88000000);
+
+    let bus = Arc::new(bus);
 
     let mut handles = vec![];
 

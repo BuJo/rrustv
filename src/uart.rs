@@ -21,6 +21,12 @@ impl Uart8250 {
     }
 }
 
+impl Default for Uart8250 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Device for Uart8250 {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Interrupt> {
         Err(Interrupt::Unimplemented(
@@ -50,10 +56,12 @@ impl Device for Uart8250 {
                 if !(0x20..0x7e).contains(&val) {
                     io::stdout().flush().unwrap();
                 }
+                Ok(())
             }
-            _ => {}
+            _ => Err(Interrupt::Unimplemented(
+                "8250: writing to unknown byte address".into(),
+            )),
         }
-        Ok(())
     }
 
     fn read_double(&self, _addr: usize) -> Result<u64, Interrupt> {
@@ -85,7 +93,7 @@ impl Device for Uart8250 {
                 Ok(buffer[0])
             }
             Uart8250::LSR => Ok(0x60 | have_data as u8),
-            Uart8250::LCR => Ok(0b0_0_000_0_11),
+            Uart8250::LCR => Ok(0b11),
             _ => Ok(0),
         }
     }

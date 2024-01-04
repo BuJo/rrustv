@@ -4,8 +4,8 @@ use std::sync::{Arc, RwLock};
 
 use log::{info, trace};
 
-use crate::device::Device;
 use crate::bus::DynBus;
+use crate::device::Device;
 use crate::irq::Interrupt;
 use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtDescs, VirtqDesc};
 
@@ -78,8 +78,8 @@ struct RequestHeader {
 
 #[derive(Debug)]
 enum RequestType {
-    IN = 0,
-    OUT = 1,
+    In = 0,
+    Out = 1,
 }
 
 impl TryFrom<u32> for RequestType {
@@ -87,8 +87,8 @@ impl TryFrom<u32> for RequestType {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(RequestType::IN),
-            1 => Ok(RequestType::OUT),
+            0 => Ok(RequestType::In),
+            1 => Ok(RequestType::Out),
             _ => Err(Interrupt::Unimplemented("unknown request type".into())),
         }
     }
@@ -180,7 +180,7 @@ impl BlkDevice {
         let buf_desc = self.get_desc(queue, hdr_desc.next);
 
         match req.typ {
-            RequestType::IN => {
+            RequestType::In => {
                 // driver wants to read data
                 let file = self.file.write().unwrap();
                 let mut space = vec![0; buf_desc.len as usize];
@@ -197,7 +197,7 @@ impl BlkDevice {
                     buf_desc.len as usize
                 );
             }
-            RequestType::OUT => {
+            RequestType::Out => {
                 // driver wants to write data
                 info!(
                     "request {} writing sector {} from block device",
@@ -213,13 +213,12 @@ impl BlkDevice {
 
     fn get_desc(&self, queue: &Queue, desc_idx: u16) -> VirtqDesc {
         let addr = queue.desc + 16 * desc_idx as usize;
-        let desc = VirtqDesc {
+        VirtqDesc {
             addr: self.bus.read_double(addr).unwrap() as usize,
             len: self.bus.read_word(addr + 8).unwrap(),
             flags: self.bus.read_half(addr + 12).unwrap(),
             next: self.bus.read_half(addr + 14).unwrap(),
-        };
-        desc
+        }
     }
 }
 
@@ -251,13 +250,13 @@ impl Device for BlkDevice {
                 };
                 Ok(())
             }
-            Register::DriverFeatures => match (*state).DriverFeaturesSel {
+            Register::DriverFeatures => match state.DriverFeaturesSel {
                 Sel::Low => {
                     state.DriverFeatures = val as u64;
                     Ok(())
                 }
                 Sel::High => {
-                    state.DriverFeatures = state.DriverFeatures | ((val as u64) << 32);
+                    state.DriverFeatures |= (val as u64) << 32;
                     info!("selected driver features: {:b}", state.DriverFeatures);
                     Ok(())
                 }
@@ -325,7 +324,7 @@ impl Device for BlkDevice {
                     if next == 0 {
                         break;
                     }
-                    addr = addr + 16 * next;
+                    addr += 16 * next;
                 }
 
                 info!(
@@ -395,8 +394,7 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueDescHigh => {
-                queues[state.queue_idx].desc =
-                    ((val as usize) << 32) | queues[state.queue_idx].desc;
+                queues[state.queue_idx].desc |= (val as usize) << 32;
                 let addr = queues[state.queue_idx].desc;
 
                 let desc = VirtqDesc {
@@ -417,8 +415,7 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueDriverHigh => {
-                queues[state.queue_idx].driver =
-                    ((val as usize) << 32) | queues[state.queue_idx].driver;
+                queues[state.queue_idx].driver |= (val as usize) << 32;
 
                 info!(
                     "queue {}: setting driver area: 0x{:x}",
@@ -431,8 +428,7 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueDeviceHigh => {
-                queues[state.queue_idx].device =
-                    ((val as usize) << 32) | queues[state.queue_idx].device;
+                queues[state.queue_idx].device |= (val as usize) << 32;
                 info!(
                     "queue {}: setting device area: 0x{:x}",
                     state.queue_idx, queues[state.queue_idx].device
@@ -448,7 +444,7 @@ impl Device for BlkDevice {
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
         Err(Interrupt::Unimplemented(
-            "writing halfword unimplemented".into(),
+            "writing half word unimplemented".into(),
         ))
     }
 
@@ -460,30 +456,29 @@ impl Device for BlkDevice {
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         let addr = addr - 0x100;
-        let res = match addr {
+
+        match addr {
             BlkConfig::CAPACITY => Ok(1),
             _ => Err(Interrupt::Unimplemented(format!(
                 "reading config register 0x{:x} unimplemented",
                 addr
             ))),
-        };
-
-        res
+        }
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let state = self.state.read().unwrap();
         let queues = self.queues.write().unwrap();
 
-        let res = match addr {
+        match addr {
             Register::MagicValue => Ok(self.MagicValue),
             Register::Version => Ok(self.Version),
             Register::DeviceID => Ok(self.DeviceID),
             Register::VendorID => Ok(self.VendorID),
             Register::DeviceFeatures => {
-                let features = (*state).DeviceFeatures;
+                let features = state.DeviceFeatures;
 
-                match (*state).DeviceFeaturesSel {
+                match state.DeviceFeaturesSel {
                     Sel::Low => Ok((features & 0xFFFFFFFF) as u32),
                     Sel::High => Ok((features >> 32) as u32),
                 }
@@ -525,16 +520,12 @@ impl Device for BlkDevice {
                 "reading register 0x{:x} unimplemented",
                 addr
             ))),
-        };
-
-        trace!("reading 0x{:x}:u32 = {:?}", addr, res);
-
-        res
+        }
     }
 
     fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
         let addr = addr - 0x100;
-        let res = match addr {
+        match addr {
             BlkConfig::NUM_QUEUES => Ok(4),
             BlkConfig::MIN_IO_SIZE => Ok(1),
             BlkConfig::WRITE_ZEROES_MAY_UNMAP => Ok(0),
@@ -542,11 +533,7 @@ impl Device for BlkDevice {
                 "reading config register 0x{}:u16 unimplemented",
                 addr
             ))),
-        };
-
-        info!("reading 0x{:x}:u16 = {:?}", addr, res);
-
-        res
+        }
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
