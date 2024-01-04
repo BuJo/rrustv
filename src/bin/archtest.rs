@@ -8,7 +8,7 @@ use log::{info, warn};
 use object::{Object, ObjectSection, ObjectSymbol};
 
 use rriscv::device::Device;
-use rriscv::dynbus::DynBus;
+use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::htif::Htif;
 use rriscv::ram::Ram;

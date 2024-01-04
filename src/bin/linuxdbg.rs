@@ -15,7 +15,7 @@ use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config;
 use object::{Object, ObjectSection};
 
-use rriscv::dynbus::DynBus;
+use rriscv::bus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;

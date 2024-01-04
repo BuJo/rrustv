@@ -3,7 +3,7 @@ use std::{env, fs};
 
 use log::{info, warn};
 
-use rriscv::dynbus::DynBus;
+use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::rtc::Rtc;

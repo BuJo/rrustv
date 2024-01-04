@@ -2,7 +2,6 @@ use log::debug;
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 
-use crate::device::Device;
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
 use crate::hart;
@@ -119,15 +118,15 @@ fn sbi_console_getchar() -> Result<u64, Error> {
     Ok(buffer[0] as u64)
 }
 
-fn sbi_shutdown<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
+fn sbi_shutdown(hart: &mut hart::Hart) -> Result<u64, Error> {
     hart.stop();
     Ok(0)
 }
 
 // System Reset Extension (EID #0x53525354 "SRST")
 
-fn sbi_system_reset<BT: Device>(
-    hart: &mut hart::Hart<BT>,
+fn sbi_system_reset(
+    hart: &mut hart::Hart,
     reset_type: u64,
     reset_reason: u64,
 ) -> Result<u64, Error> {
@@ -163,7 +162,7 @@ fn sbi_system_reset<BT: Device>(
 }
 
 // Legacy Extensions have a different calling convention
-fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
+fn call_0_1(hart: &mut hart::Hart) -> Result<u64, Error> {
     let func = hart.get_register(Register::EID as u8);
 
     let result = match func {
@@ -186,7 +185,7 @@ fn call_0_1<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     }
 }
 
-fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
+fn call_0_2(hart: &mut hart::Hart) -> Result<u64, Error> {
     let func = (
         hart.get_register(Register::EID as u8),
         hart.get_register(Register::FID as u8),
@@ -222,7 +221,7 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     }
 }
 
-pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Interrupt> {
+pub fn call(hart: &mut hart::Hart) -> Result<(), Interrupt> {
     if (0x00..=0x0F).contains(&hart.get_register(Register::EID as u8)) {
         call_0_1(hart)
             .map(|_x| ())

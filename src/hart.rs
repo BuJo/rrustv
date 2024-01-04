@@ -7,6 +7,7 @@ use crate::clint;
 use crate::csr;
 use crate::csr::Csr;
 use crate::device::Device;
+use crate::bus::DynBus;
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
 use crate::irq::Interrupt;
@@ -14,10 +15,10 @@ use crate::irq::Interrupt::{Halt, IllegalOpcode};
 use crate::reg::reg;
 use crate::see;
 
-pub struct Hart<BT: Device> {
+pub struct Hart {
     start_pc: usize,
 
-    pub(crate) bus: Arc<BT>,
+    pub(crate) bus: Arc<DynBus>,
     registers: [u64; 32],
     pc: usize,
     csr: Csr,
@@ -25,8 +26,8 @@ pub struct Hart<BT: Device> {
     stop: bool,
 }
 
-impl<BT: Device> Hart<BT> {
-    pub fn new(id: u64, pc: usize, bus: Arc<BT>) -> Self {
+impl Hart {
+    pub fn new(id: u64, pc: usize, bus: Arc<DynBus>) -> Self {
         let mut m = Hart {
             start_pc: pc,
             bus,
@@ -180,7 +181,7 @@ impl SignExtendable for i64 {
     }
 }
 
-impl<BT: Device> Hart<BT> {
+impl Hart {
     fn execute_instruction(
         &mut self,
         instruction: InstructionFormat,
@@ -1658,9 +1659,9 @@ impl<BT: Device> Hart<BT> {
 
 #[cfg(test)]
 mod tests {
+    use crate::bus::DynBus;
     use std::sync::Arc;
 
-    use crate::bus::Bus;
     use crate::hart::Hart;
     use crate::ins::{Instruction, InstructionFormat};
     use crate::ram::Ram;
@@ -1671,7 +1672,9 @@ mod tests {
     fn addi() {
         let rom = Rom::new(vec![0x13, 0x81, 0x00, 0x7d]);
         let ram = Ram::new();
-        let bus = Bus::new(rom, ram);
+        let bus = DynBus::new();
+        bus.map(rom, 0x0..0x1FF);
+        bus.map(ram, 0x80000000..0x88000000);
         let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick().expect("tick");
         assert_eq!(m.get_register(2), 2000, "x1 mismatch");
@@ -1681,7 +1684,9 @@ mod tests {
     fn addi_neg() {
         let rom = Rom::new(vec![0x93, 0x01, 0x81, 0xc1]);
         let ram = Ram::new();
-        let bus = Bus::new(rom, ram);
+        let bus = DynBus::new();
+        bus.map(rom, 0x0..0x1FF);
+        bus.map(ram, 0x80000000..0x88000000);
         let mut m = Hart::new(0, 0, Arc::new(bus));
         m.tick().expect("tick");
         assert_eq!(m.get_register(3) as i64, -1000, "x1 mismatch");
@@ -1699,7 +1704,9 @@ mod tests {
             0x13, 0x03, 0x43, 0x00, // addi	t1,t1,4
         ]);
         let ram = Ram::new();
-        let bus = Bus::new(rom, ram);
+        let bus = DynBus::new();
+        bus.map(rom, 0x0..0x1FF);
+        bus.map(ram, 0x80000000..0x88000000);
         let mut m = Hart::new(0, 0, Arc::new(bus));
         for _ in 0..=6 {
             m.tick().expect("tick");
@@ -1713,10 +1720,12 @@ mod tests {
         assert_eq!(m.get_register(6), 0x40 + 4, "deadbeef");
     }
 
-    fn hart() -> Hart<Bus> {
+    fn hart() -> Hart {
         let rom = Rom::new(vec![]);
         let ram = Ram::new();
-        let bus = Bus::new(rom, ram);
+        let bus = DynBus::new();
+        bus.map(rom, 0x0..0x1FF);
+        bus.map(ram, 0x80000000..0x88000000);
         Hart::new(0, 0, Arc::new(bus))
     }
 

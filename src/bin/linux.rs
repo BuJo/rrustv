@@ -5,7 +5,7 @@ use std::{env, fs};
 use log::error;
 use object::{Object, ObjectSection};
 
-use rriscv::dynbus::DynBus;
+use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;

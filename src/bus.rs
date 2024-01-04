@@ -1,109 +1,161 @@
+use std::ops::Range;
+use std::sync::RwLock;
+
 use crate::device::Device;
 use crate::irq::Interrupt;
-use crate::ram::Ram;
-use crate::rom::Rom;
 
-pub static RAM_ADDR: usize = 0x80000000;
+type DeviceList = Vec<(Range<usize>, Box<dyn Device>)>;
 
-pub struct Bus {
-    rom: Rom,
-    ram: Ram,
+pub struct DynBus {
+    devices: RwLock<DeviceList>,
 }
 
-impl Bus {
-    pub fn new(rom: Rom, ram: Ram) -> Bus {
-        Self { rom, ram }
+// Safety: Every interaction is gated through the RwLock protecting the devices
+// additionally the bus should not change while the machine is running?  Hot plugging
+// RAM or CPUs should be incredibly rare...
+unsafe impl Send for DynBus {}
+
+unsafe impl Sync for DynBus {}
+
+impl DynBus {
+    pub fn new() -> DynBus {
+        Self {
+            devices: RwLock::new(vec![]),
+        }
+    }
+
+    pub fn map(&self, device: impl Device + 'static, range: Range<usize>) {
+        let mut devices = self.devices.write().unwrap();
+
+        devices.push((range, Box::new(device)));
     }
 }
 
-impl Device for Bus {
+impl Default for DynBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Device for DynBus {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
-        match addr {
-            0x80000000.. => self.ram.write_double(addr - RAM_ADDR, val),
-            _ => Err(Interrupt::Unmapped(addr)),
-        }
-    }
+        let devices = self.devices.read().unwrap();
 
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
-        match addr {
-            0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val),
-            _ => Err(Interrupt::Unmapped(addr)),
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_double(addr - range.start, val);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
+    }
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_word(addr - range.start, val);
+            }
+        }
+        Err(Interrupt::Unmapped(addr))
     }
 
     fn write_half(&self, addr: usize, val: u16) -> Result<(), Interrupt> {
-        match addr {
-            0x80000000.. => self.ram.write_half(addr - RAM_ADDR, val),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_half(addr - range.start, val);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
 
     fn write_byte(&self, addr: usize, val: u8) -> Result<(), Interrupt> {
-        match addr {
-            0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.write_byte(addr - range.start, val);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
-        match addr {
-            0x0000..=0x1FFF => self.rom.read_double(addr),
-            0x80000000.. => self.ram.read_double(addr - RAM_ADDR),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_double(addr - range.start);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
-        match addr {
-            0x0000..=0x1FFF => self.rom.read_word(addr),
-            0x80000000.. => self.ram.read_word(addr - RAM_ADDR),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_word(addr - range.start);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
 
     fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
-        match addr {
-            0x0000..=0x1FFF => self.rom.read_half(addr),
-            0x80000000.. => self.ram.read_half(addr - RAM_ADDR),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_half(addr - range.start);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
 
     fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
-        match addr {
-            0x0000..=0x1FFF => self.rom.read_byte(addr),
-            0x80000000.. => self.ram.read_byte(addr - RAM_ADDR),
-            _ => Err(Interrupt::Unmapped(addr)),
+        let devices = self.devices.read().unwrap();
+
+        for (range, device) in devices.iter() {
+            if range.contains(&addr) {
+                return device.read_byte(addr - range.start);
+            }
         }
+        Err(Interrupt::Unmapped(addr))
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::bus::Bus;
+mod test {
     use crate::device::Device;
+    use crate::bus::DynBus;
+    use crate::htif::Htif;
     use crate::ram::Ram;
-    use crate::rom::Rom;
 
-    fn bus() -> Bus {
-        let rom = Rom::new(vec![1, 2, 3, 4]);
+    #[test]
+    fn basic() {
+        let bus = DynBus::new();
+        let err = bus.write_word(0x0, 0x0);
+        assert_eq!(err.is_ok(), false, "no device should error on write");
+    }
+
+    #[test]
+    fn ram() {
         let ram = Ram::new();
+        let bus = DynBus::new();
+        bus.map(ram, 0..0x2000);
 
-        Bus::new(rom, ram)
+        let err = bus.write_word(0x0, 0x0);
+        assert_eq!(err.is_ok(), true, "ram should write");
     }
 
     #[test]
-    fn non_writeable_rom() {
-        let bus = bus();
-        let can_write = bus.write_word(0, 0x0).is_ok();
+    fn htif() {
+        let htif = Htif::new();
+        let bus = DynBus::new();
+        bus.map(htif, 0..50);
 
-        assert_eq!(can_write, false, "rom should not be writeable");
-    }
-
-    #[test]
-    fn writeable_ram() {
-        let bus = bus();
-        let can_write = bus.write_word(0x80000000, 0x1).is_ok();
-
-        assert_eq!(can_write, true, "ram should be writeable");
+        let err = bus.write_word(0x0, 0x0);
+        assert_eq!(err.is_ok(), false, "should shut down");
     }
 }

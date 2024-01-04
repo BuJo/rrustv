@@ -11,18 +11,17 @@ use gdb_remote_protocol::{
 use log::debug;
 
 use crate::device::Device;
-use crate::dynbus::DynBus;
 use crate::hart::Hart;
 use crate::irq::Interrupt;
 
 pub struct Emulator {
-    hart: RefCell<Hart<DynBus>>,
+    hart: RefCell<Hart>,
     breakpoints: RefCell<Vec<usize>>,
     trap: Arc<AtomicBool>,
 }
 
 impl Emulator {
-    pub fn new(hart: Hart<DynBus>) -> Emulator {
+    pub fn new(hart: Hart) -> Emulator {
         Emulator {
             hart: hart.into(),
             breakpoints: RefCell::new(vec![]),

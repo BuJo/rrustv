@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 use log::{info, trace};
 
 use crate::device::Device;
-use crate::dynbus::DynBus;
+use crate::bus::DynBus;
 use crate::irq::Interrupt;
 use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtDescs, VirtqDesc};
 

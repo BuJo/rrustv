@@ -5,7 +5,7 @@ use std::sync::Arc;
 use log::trace;
 
 use crate::device::Device;
-use crate::dynbus::DynBus;
+use crate::bus::DynBus;
 use crate::hart::Hart;
 use crate::irq::Interrupt;
 use crate::{csr, rtc};
@@ -182,7 +182,7 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     None
 }
 
-pub(crate) fn interrupt<BT: Device>(hart: &Hart<BT>) -> Option<InterruptType> {
+pub(crate) fn interrupt(hart: &Hart) -> Option<InterruptType> {
     let mode = PrivilegeLevel::M;
     let mstatus = hart.get_csr(csr::MSTATUS);
 
