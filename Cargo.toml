@@ -17,6 +17,7 @@ signal-hook = "0.3.17"
 term = "0.7.0"
 log4rs = { version = "1.2.0" }
 config = "0.13.4"
+crossbeam = { version = "0.8.3", features = ["crossbeam-channel"] }
 
 [profile.dev]
 opt-level = 0
