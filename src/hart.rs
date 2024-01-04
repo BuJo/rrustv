@@ -9,8 +9,8 @@ use crate::csr::Csr;
 use crate::device::Device;
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
-use crate::plic::Fault;
-use crate::plic::Fault::{Halt, IllegalOpcode};
+use crate::irq::Interrupt;
+use crate::irq::Interrupt::{Halt, IllegalOpcode};
 use crate::reg::reg;
 use crate::see;
 
@@ -50,7 +50,7 @@ impl<BT: Device> Hart<BT> {
         self.stop = true;
     }
 
-    pub fn tick(&mut self) -> Result<(), Fault> {
+    pub fn tick(&mut self) -> Result<(), Interrupt> {
         if self.stop {
             return Err(Halt);
         }
@@ -69,7 +69,7 @@ impl<BT: Device> Hart<BT> {
 
         match res {
             Ok(_) => Ok(()),
-            Err(Fault::MemoryFault(0)) => Ok(()), // Ignore zero-reads/writes
+            Err(Interrupt::MemoryFault(0)) => Ok(()), // Ignore zero-reads/writes
             Err(err) => {
                 debug!("hart fault: {:?}", err);
                 Err(err)
@@ -104,7 +104,7 @@ impl<BT: Device> Hart<BT> {
         self.pc
     }
 
-    fn fetch_instruction(&mut self) -> Result<Instruction, Fault> {
+    fn fetch_instruction(&mut self) -> Result<Instruction, Interrupt> {
         // Assuming little-endian, the first byte contains the opcode
         let ins = self.bus.read_word(self.pc)?;
         match ins & 0b11 {
@@ -185,7 +185,7 @@ impl<BT: Device> Hart<BT> {
         &mut self,
         instruction: InstructionFormat,
         ins: Instruction,
-    ) -> Result<(), Fault> {
+    ) -> Result<(), Interrupt> {
         match instruction {
             // RV32I
 
@@ -1630,7 +1630,7 @@ impl<BT: Device> Hart<BT> {
                     self.csr.read(csr::MHARTID),
                     instruction
                 );
-                return Err(Fault::MemoryFault(self.pc));
+                return Err(Interrupt::MemoryFault(self.pc));
             }
         };
 

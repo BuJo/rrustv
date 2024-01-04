@@ -6,8 +6,8 @@ use crate::device::Device;
 // Supervisor Execution Environment (SEE) implementing
 // RISC-V SBI (Supervisor Binary Interface)
 use crate::hart;
-use crate::plic::Fault;
-use crate::plic::Fault::Unimplemented;
+use crate::irq::Interrupt;
+use crate::irq::Interrupt::Unimplemented;
 
 const SBI_VERSION: (u64, u64) = (1, 0);
 const SBI_IMPL_ID: u64 = 0xFFFFFFFF;
@@ -222,7 +222,7 @@ fn call_0_2<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<u64, Error> {
     }
 }
 
-pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Fault> {
+pub fn call<BT: Device>(hart: &mut hart::Hart<BT>) -> Result<(), Interrupt> {
     if (0x00..=0x0F).contains(&hart.get_register(Register::EID as u8)) {
         call_0_1(hart)
             .map(|_x| ())

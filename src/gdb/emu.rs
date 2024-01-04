@@ -13,7 +13,7 @@ use log::debug;
 use crate::device::Device;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
-use crate::plic::Fault;
+use crate::irq::Interrupt;
 
 pub struct Emulator {
     hart: RefCell<Hart<DynBus>>,
@@ -173,16 +173,16 @@ impl Handler for Emulator {
     }
 }
 
-impl From<Fault> for gdb_remote_protocol::Error {
-    fn from(value: Fault) -> Self {
+impl From<Interrupt> for gdb_remote_protocol::Error {
+    fn from(value: Interrupt) -> Self {
         match value {
-            Fault::MemoryFault(_) => Error::Error(0),
-            Fault::Unmapped(_) => Error::Error(1),
-            Fault::Unaligned(_) => Error::Error(2),
-            Fault::Halt => Error::Error(3),
-            Fault::Unimplemented(_) => Error::Unimplemented,
-            Fault::InstructionDecodingError => Error::Error(4),
-            Fault::IllegalOpcode(_) => Error::Error(5),
+            Interrupt::MemoryFault(_) => Error::Error(0),
+            Interrupt::Unmapped(_) => Error::Error(1),
+            Interrupt::Unaligned(_) => Error::Error(2),
+            Interrupt::Halt => Error::Error(3),
+            Interrupt::Unimplemented(_) => Error::Unimplemented,
+            Interrupt::InstructionDecodingError => Error::Error(4),
+            Interrupt::IllegalOpcode(_) => Error::Error(5),
         }
     }
 }

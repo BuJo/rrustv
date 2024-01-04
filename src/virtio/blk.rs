@@ -6,7 +6,7 @@ use log::{info, trace};
 
 use crate::device::Device;
 use crate::dynbus::DynBus;
-use crate::plic::Fault;
+use crate::irq::Interrupt;
 use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtDescs, VirtqDesc};
 
 #[allow(non_snake_case)]
@@ -83,13 +83,13 @@ enum RequestType {
 }
 
 impl TryFrom<u32> for RequestType {
-    type Error = Fault;
+    type Error = Interrupt;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(RequestType::IN),
             1 => Ok(RequestType::OUT),
-            _ => Err(Fault::Unimplemented("unknown request type".into())),
+            _ => Err(Interrupt::Unimplemented("unknown request type".into())),
         }
     }
 }
@@ -224,11 +224,13 @@ impl BlkDevice {
 }
 
 impl Device for BlkDevice {
-    fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
-        Err(Fault::Unimplemented("writing double unimplemented".into()))
+    fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "writing double unimplemented".into(),
+        ))
     }
 
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         trace!("writing 0x{:x} = {}", addr, val);
 
         let mut state = self.state.write().unwrap();
@@ -437,28 +439,30 @@ impl Device for BlkDevice {
                 );
                 Ok(())
             }
-            _ => Err(Fault::Unimplemented(format!(
+            _ => Err(Interrupt::Unimplemented(format!(
                 "writing register 0x{:x} unimplemented",
                 addr
             ))),
         }
     }
 
-    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
+    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
             "writing halfword unimplemented".into(),
         ))
     }
 
-    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented("writing byte unimplemented".into()))
+    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "writing byte unimplemented".into(),
+        ))
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         let addr = addr - 0x100;
         let res = match addr {
             BlkConfig::CAPACITY => Ok(1),
-            _ => Err(Fault::Unimplemented(format!(
+            _ => Err(Interrupt::Unimplemented(format!(
                 "reading config register 0x{:x} unimplemented",
                 addr
             ))),
@@ -467,7 +471,7 @@ impl Device for BlkDevice {
         res
     }
 
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let state = self.state.read().unwrap();
         let queues = self.queues.write().unwrap();
 
@@ -508,7 +512,7 @@ impl Device for BlkDevice {
                     BlkConfig::MAX_APPEND_SECTORS => Ok(0),
                     BlkConfig::WRITE_GRANULARITY => Ok(0),
                     BlkConfig::MODEL => Ok(0),
-                    _ => Err(Fault::Unimplemented(format!(
+                    _ => Err(Interrupt::Unimplemented(format!(
                         "reading config register 0x{:x}:u32 unimplemented",
                         addr
                     ))),
@@ -517,7 +521,7 @@ impl Device for BlkDevice {
             Register::ConfigGeneration => Ok(0xdeadbeef),
             Register::QueueReady => Ok(queues[state.queue_idx].ready as u32),
             Register::QueueSizeMax => Ok(queues.capacity() as u32),
-            _ => Err(Fault::Unimplemented(format!(
+            _ => Err(Interrupt::Unimplemented(format!(
                 "reading register 0x{:x} unimplemented",
                 addr
             ))),
@@ -528,13 +532,13 @@ impl Device for BlkDevice {
         res
     }
 
-    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+    fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
         let addr = addr - 0x100;
         let res = match addr {
             BlkConfig::NUM_QUEUES => Ok(4),
             BlkConfig::MIN_IO_SIZE => Ok(1),
             BlkConfig::WRITE_ZEROES_MAY_UNMAP => Ok(0),
-            _ => Err(Fault::Unimplemented(format!(
+            _ => Err(Interrupt::Unimplemented(format!(
                 "reading config register 0x{}:u16 unimplemented",
                 addr
             ))),
@@ -545,7 +549,7 @@ impl Device for BlkDevice {
         res
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         let addr = addr - 0x100;
         let res = match addr {
             BlkConfig::WRITEBACK => {
@@ -553,7 +557,7 @@ impl Device for BlkDevice {
             }
             BlkConfig::PHYSICAL_BLOCK_EXP => Ok(1), // one logical per physical block
             BlkConfig::ALIGNMENT_OFFSET => Ok(0),
-            _ => Err(Fault::Unimplemented(format!(
+            _ => Err(Interrupt::Unimplemented(format!(
                 "reading config register 0x{:x}:u8 unimplemented",
                 addr
             ))),

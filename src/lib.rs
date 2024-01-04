@@ -10,6 +10,7 @@ pub mod gdb;
 pub mod hart;
 pub mod htif;
 pub mod ins;
+pub mod irq;
 pub mod plic;
 pub mod ram;
 pub mod reg;

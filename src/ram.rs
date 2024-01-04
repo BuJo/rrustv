@@ -1,8 +1,8 @@
 use std::sync::RwLock;
 
 use crate::device::Device;
-use crate::plic::Fault;
-use crate::plic::Fault::MemoryFault;
+use crate::irq::Interrupt;
+use crate::irq::Interrupt::MemoryFault;
 
 pub const DRAM_SIZE: usize = 1024 * 1024 * 128; // 128MiB
 
@@ -38,14 +38,14 @@ impl Default for Ram {
 }
 
 impl Device for Ram {
-    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         let mut shared = self.data.write().unwrap();
 
         shared.splice(addr..(addr + 8), val.to_le_bytes());
 
         Ok(())
     }
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         let mut shared = self.data.write().unwrap();
 
         shared.splice(addr..(addr + 4), val.to_le_bytes());
@@ -53,7 +53,7 @@ impl Device for Ram {
         Ok(())
     }
 
-    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Interrupt> {
         let mut shared = self.data.write().unwrap();
 
         shared.splice(addr..(addr + 2), val.to_le_bytes());
@@ -61,14 +61,14 @@ impl Device for Ram {
         Ok(())
     }
 
-    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Interrupt> {
         let mut shared = self.data.write().unwrap();
 
         *(shared.get_mut(addr).ok_or(MemoryFault(addr))?) = val;
         Ok(())
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         let data = self.data.read().unwrap();
 
         let bytes = data.get(addr..(addr + 8)).ok_or(MemoryFault(addr))?;
@@ -77,7 +77,7 @@ impl Device for Ram {
         let val = u64::from_le_bytes(bytes);
         Ok(val)
     }
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let data = self.data.read().unwrap();
 
         let bytes = data.get(addr..(addr + 4)).ok_or(MemoryFault(addr))?;
@@ -86,7 +86,7 @@ impl Device for Ram {
         Ok(val)
     }
 
-    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+    fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
         let data = self.data.read().unwrap();
 
         let bytes = data.get(addr..(addr + 2)).ok_or(MemoryFault(addr))?;
@@ -95,7 +95,7 @@ impl Device for Ram {
         Ok(val)
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         let data = self.data.read().unwrap();
 
         data.get(addr).copied().ok_or(MemoryFault(addr))

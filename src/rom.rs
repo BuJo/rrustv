@@ -1,8 +1,8 @@
 use std::sync::RwLock;
 
 use crate::device::Device;
-use crate::plic::Fault;
-use crate::plic::Fault::MemoryFault;
+use crate::irq::Interrupt;
+use crate::irq::Interrupt::MemoryFault;
 
 pub struct Rom {
     data: RwLock<Vec<u8>>,
@@ -29,23 +29,23 @@ impl Rom {
 }
 
 impl Device for Rom {
-    fn write_double(&self, addr: usize, _val: u64) -> Result<(), Fault> {
+    fn write_double(&self, addr: usize, _val: u64) -> Result<(), Interrupt> {
         Err(MemoryFault(addr))
     }
 
-    fn write_word(&self, addr: usize, _val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, _val: u32) -> Result<(), Interrupt> {
         Err(MemoryFault(addr))
     }
 
-    fn write_half(&self, addr: usize, _val: u16) -> Result<(), Fault> {
+    fn write_half(&self, addr: usize, _val: u16) -> Result<(), Interrupt> {
         Err(MemoryFault(addr))
     }
 
-    fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, addr: usize, _val: u8) -> Result<(), Interrupt> {
         Err(MemoryFault(addr))
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         let data = self.data.read().unwrap();
 
         let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u64)
@@ -59,7 +59,7 @@ impl Device for Rom {
         Ok(val)
     }
 
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let data = self.data.read().unwrap();
 
         let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u32)
@@ -69,7 +69,7 @@ impl Device for Rom {
         Ok(val)
     }
 
-    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+    fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
         let data = self.data.read().unwrap();
 
         let val = (*data.get(addr).ok_or(MemoryFault(addr))? as u16)
@@ -77,7 +77,7 @@ impl Device for Rom {
         Ok(val)
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         let data = self.data.read().unwrap();
 
         data.get(addr).copied().ok_or(MemoryFault(addr))

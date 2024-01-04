@@ -1,5 +1,5 @@
 use crate::device::Device;
-use crate::plic::Fault;
+use crate::irq::Interrupt;
 use crate::ram::Ram;
 use crate::rom::Rom;
 
@@ -17,62 +17,62 @@ impl Bus {
 }
 
 impl Device for Bus {
-    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
             0x80000000.. => self.ram.write_double(addr - RAM_ADDR, val),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         match addr {
             0x80000000.. => self.ram.write_word(addr - RAM_ADDR, val),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn write_half(&self, addr: usize, val: u16) -> Result<(), Fault> {
+    fn write_half(&self, addr: usize, val: u16) -> Result<(), Interrupt> {
         match addr {
             0x80000000.. => self.ram.write_half(addr - RAM_ADDR, val),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Interrupt> {
         match addr {
             0x80000000.. => self.ram.write_byte(addr - RAM_ADDR, val),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_double(addr),
             0x80000000.. => self.ram.read_double(addr - RAM_ADDR),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_word(addr),
             0x80000000.. => self.ram.read_word(addr - RAM_ADDR),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn read_half(&self, addr: usize) -> Result<u16, Fault> {
+    fn read_half(&self, addr: usize) -> Result<u16, Interrupt> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_half(addr),
             0x80000000.. => self.ram.read_half(addr - RAM_ADDR),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         match addr {
             0x0000..=0x1FFF => self.rom.read_byte(addr),
             0x80000000.. => self.ram.read_byte(addr - RAM_ADDR),
-            _ => Err(Fault::Unmapped(addr)),
+            _ => Err(Interrupt::Unmapped(addr)),
         }
     }
 }

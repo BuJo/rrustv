@@ -1,19 +1,8 @@
 use crate::device::Device;
-use crate::ins::Instruction;
+use crate::irq::Interrupt;
 use log::trace;
 use std::collections::HashMap;
 use std::sync::RwLock;
-
-#[derive(Debug)]
-pub enum Fault {
-    MemoryFault(usize),
-    Unmapped(usize),
-    Unaligned(usize),
-    Halt,
-    Unimplemented(String),
-    InstructionDecodingError,
-    IllegalOpcode(Instruction),
-}
 
 pub struct Plic {
     interrupt_bits: RwLock<HashMap<usize, u32>>,
@@ -27,12 +16,12 @@ impl Plic {
     }
 }
 impl Device for Plic {
-    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         trace!("writing double word to 0x{:x} = {}", addr, val);
         Ok(())
     }
 
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         match addr {
             0x0..=0x000FFC => {} //trace!("setting interrupt priority: {} -> {}", addr, val),
             0x001000..=0x00107C => {
@@ -66,21 +55,23 @@ impl Device for Plic {
         Ok(())
     }
 
-    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
+    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
             "writing half word unimplemented".into(),
         ))
     }
 
-    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented("writing byte unimplemented".into()))
+    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "writing byte unimplemented".into(),
+        ))
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         Ok(self.read_word(addr)? as u64 | (self.read_word(addr + 4)? as u64) << 32)
     }
 
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         match addr {
             0x000000..=0x000FFC => {
                 trace!("reading interrupt source priority: {} -> {:b}", addr / 4, 0)
@@ -106,13 +97,15 @@ impl Device for Plic {
         Ok(0)
     }
 
-    fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
-        Err(Fault::Unimplemented(
+    fn read_half(&self, _addr: usize) -> Result<u16, Interrupt> {
+        Err(Interrupt::Unimplemented(
             "reading half word unimplemented".into(),
         ))
     }
 
-    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Fault::Unimplemented("reading byte unimplemented".into()))
+    fn read_byte(&self, _addr: usize) -> Result<u8, Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "reading byte unimplemented".into(),
+        ))
     }
 }

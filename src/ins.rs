@@ -2,7 +2,7 @@ use log::trace;
 use std::fmt;
 use std::fmt::{Formatter, LowerHex};
 
-use crate::plic::Fault::{self, IllegalOpcode, InstructionDecodingError};
+use crate::irq::Interrupt::{self, IllegalOpcode, InstructionDecodingError};
 
 use self::InstructionFormat::{B, I, J, R, S, U};
 
@@ -138,7 +138,7 @@ impl Instruction {
         }
     }
 
-    pub fn decode(self) -> Result<(Instruction, InstructionFormat), Fault> {
+    pub fn decode(self) -> Result<(Instruction, InstructionFormat), Interrupt> {
         let res = match self {
             Instruction::IRV32(instruction) => Instruction::decode_32(instruction),
             Instruction::CRV32(instruction) => Instruction::decode_16(instruction),
@@ -146,7 +146,7 @@ impl Instruction {
         res.map(|d| (self, d)).map_err(|_| IllegalOpcode(self))
     }
 
-    fn decode_32(instruction: u32) -> Result<InstructionFormat, Fault> {
+    fn decode_32(instruction: u32) -> Result<InstructionFormat, Interrupt> {
         let opcode = (instruction & 0b1111111) as u8;
         let decoded = match opcode {
             0b0110011 | 0b0101111 | 0b0111011 => {
@@ -272,7 +272,7 @@ impl Instruction {
         Ok(decoded)
     }
 
-    fn decode_16(instruction: u16) -> Result<InstructionFormat, Fault> {
+    fn decode_16(instruction: u16) -> Result<InstructionFormat, Interrupt> {
         const RVC_REG_OFFSET: u8 = 0x8;
 
         let op = instruction & 0b11;

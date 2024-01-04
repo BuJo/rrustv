@@ -7,7 +7,7 @@ use log::trace;
 use crate::device::Device;
 use crate::dynbus::DynBus;
 use crate::hart::Hart;
-use crate::plic::Fault;
+use crate::irq::Interrupt;
 use crate::{csr, rtc};
 
 pub const MSIP_HART0_ADDR: usize = 0x0;
@@ -24,7 +24,7 @@ enum PrivilegeLevel {
 }
 
 #[derive(Debug)]
-pub enum Interrupt {
+pub enum InterruptType {
     // External from PLIC
     MEIP = 11,
     SEIP = 9,
@@ -41,7 +41,7 @@ pub enum Interrupt {
     USIP = 0,
 }
 
-impl Display for Interrupt {
+impl Display for InterruptType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "interrupt: {:?}", self)
     }
@@ -64,7 +64,7 @@ impl Clint {
 }
 
 impl Device for Clint {
-    fn write_double(&self, addr: usize, val: u64) -> Result<(), Fault> {
+    fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
             MTIMECMP_ADDR => self
                 .bus
@@ -76,7 +76,7 @@ impl Device for Clint {
         }
     }
 
-    fn write_word(&self, addr: usize, val: u32) -> Result<(), Fault> {
+    fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         match addr {
             MSIP_HART0_ADDR..MSIP_HART4095_ADDR => {
                 let hartid = (addr - MSIP_HART0_ADDR) / 4;
@@ -92,17 +92,19 @@ impl Device for Clint {
         }
     }
 
-    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
-        Err(Fault::Unimplemented(
+    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
             "writing half word unimplemented".into(),
         ))
     }
 
-    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Fault> {
-        Err(Fault::Unimplemented("writing byte unimplemented".into()))
+    fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "writing byte unimplemented".into(),
+        ))
     }
 
-    fn read_double(&self, addr: usize) -> Result<u64, Fault> {
+    fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         match addr {
             MTIME_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIME_ADDR),
             _ => {
@@ -112,7 +114,7 @@ impl Device for Clint {
         }
     }
 
-    fn read_word(&self, addr: usize) -> Result<u32, Fault> {
+    fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         match addr {
             MSIP_HART0_ADDR..MSIP_HART4095_ADDR => {
                 let hartid = (addr - MSIP_HART0_ADDR) / 4;
@@ -128,57 +130,59 @@ impl Device for Clint {
         }
     }
 
-    fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
-        Err(Fault::Unimplemented(
+    fn read_half(&self, _addr: usize) -> Result<u16, Interrupt> {
+        Err(Interrupt::Unimplemented(
             "reading half word unimplemented".into(),
         ))
     }
 
-    fn read_byte(&self, _addr: usize) -> Result<u8, Fault> {
-        Err(Fault::Unimplemented("reading byte unimplemented".into()))
+    fn read_byte(&self, _addr: usize) -> Result<u8, Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "reading byte unimplemented".into(),
+        ))
     }
 }
 
-fn pending_interrupt(mip: u64, mie: u64) -> Option<Interrupt> {
+fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     let ip = mip & mie;
 
     // External from PLIC
-    if ip >> (Interrupt::MEIP as u8) == 0b1 {
-        return Some(Interrupt::MEIP);
+    if ip >> (InterruptType::MEIP as u8) == 0b1 {
+        return Some(InterruptType::MEIP);
     }
-    if ip >> (Interrupt::SEIP as u8) == 0b1 {
-        return Some(Interrupt::SEIP);
+    if ip >> (InterruptType::SEIP as u8) == 0b1 {
+        return Some(InterruptType::SEIP);
     }
-    if ip >> (Interrupt::USIP as u8) == 0b1 {
-        return Some(Interrupt::USIP);
+    if ip >> (InterruptType::USIP as u8) == 0b1 {
+        return Some(InterruptType::USIP);
     }
 
     // Local Timer
-    if ip >> (Interrupt::MTIP as u8) == 0b1 {
-        return Some(Interrupt::MTIP);
+    if ip >> (InterruptType::MTIP as u8) == 0b1 {
+        return Some(InterruptType::MTIP);
     }
-    if ip >> (Interrupt::STIP as u8) == 0b1 {
-        return Some(Interrupt::STIP);
+    if ip >> (InterruptType::STIP as u8) == 0b1 {
+        return Some(InterruptType::STIP);
     }
-    if ip >> (Interrupt::UEIP as u8) == 0b1 {
-        return Some(Interrupt::UEIP);
+    if ip >> (InterruptType::UEIP as u8) == 0b1 {
+        return Some(InterruptType::UEIP);
     }
 
     // Local Software
-    if ip >> (Interrupt::MSIP as u8) == 0b1 {
-        return Some(Interrupt::MSIP);
+    if ip >> (InterruptType::MSIP as u8) == 0b1 {
+        return Some(InterruptType::MSIP);
     }
-    if ip >> (Interrupt::SSIP as u8) == 0b1 {
-        return Some(Interrupt::SSIP);
+    if ip >> (InterruptType::SSIP as u8) == 0b1 {
+        return Some(InterruptType::SSIP);
     }
-    if ip >> (Interrupt::USIP as u8) == 0b1 {
-        return Some(Interrupt::USIP);
+    if ip >> (InterruptType::USIP as u8) == 0b1 {
+        return Some(InterruptType::USIP);
     }
 
     None
 }
 
-pub(crate) fn interrupt<BT: Device>(hart: &Hart<BT>) -> Option<Interrupt> {
+pub(crate) fn interrupt<BT: Device>(hart: &Hart<BT>) -> Option<InterruptType> {
     let mode = PrivilegeLevel::M;
     let mstatus = hart.get_csr(csr::MSTATUS);
 
