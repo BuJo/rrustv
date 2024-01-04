@@ -1,5 +1,5 @@
 use crate::device::Device;
-use crate::plic::Fault;
+use crate::irq::Interrupt;
 use std::io;
 use std::io::{Read, Write};
 
@@ -22,19 +22,25 @@ impl Uart8250 {
 }
 
 impl Device for Uart8250 {
-    fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+    fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: writing double unimplemented".into(),
+        ))
     }
 
-    fn write_word(&self, _addr: usize, _val: u32) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+    fn write_word(&self, _addr: usize, _val: u32) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: writing word unimplemented".into(),
+        ))
     }
 
-    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Fault> {
-        Err(Fault::Unimplemented)
+    fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: writing halfword unimplemented".into(),
+        ))
     }
 
-    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Fault> {
+    fn write_byte(&self, addr: usize, val: u8) -> Result<(), Interrupt> {
         // Emulating a 8250 / 16550 UART
         match addr {
             Uart8250::RX => {
@@ -50,19 +56,25 @@ impl Device for Uart8250 {
         Ok(())
     }
 
-    fn read_double(&self, _addr: usize) -> Result<u64, Fault> {
-        Err(Fault::Unimplemented)
+    fn read_double(&self, _addr: usize) -> Result<u64, Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: reading double unimplemented".into(),
+        ))
     }
 
-    fn read_word(&self, _addr: usize) -> Result<u32, Fault> {
-        Err(Fault::Unimplemented)
+    fn read_word(&self, _addr: usize) -> Result<u32, Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: reading word unimplemented".into(),
+        ))
     }
 
-    fn read_half(&self, _addr: usize) -> Result<u16, Fault> {
-        Err(Fault::Unimplemented)
+    fn read_half(&self, _addr: usize) -> Result<u16, Interrupt> {
+        Err(Interrupt::Unimplemented(
+            "8250: reading halfword unimplemented".into(),
+        ))
     }
 
-    fn read_byte(&self, addr: usize) -> Result<u8, Fault> {
+    fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         // Emulating a 8250 / 16550 UART
         let have_data: bool = false; // XXX: need a way to detect presence of data in stdin
 
@@ -79,8 +91,8 @@ impl Device for Uart8250 {
     }
 }
 
-impl From<io::Error> for Fault {
+impl From<io::Error> for Interrupt {
     fn from(_value: io::Error) -> Self {
-        Fault::MemoryFault(0)
+        Interrupt::Unimplemented("8250: io error not handled".into())
     }
 }

@@ -1,73 +1,102 @@
 /dts-v1/;
 
 / {
-	#address-cells = <1>;
-	#size-cells = <1>;
-	model = "BuJo,rriscv";
-	aliases {
-	};
+	#address-cells = <0x02>;
+	#size-cells = <0x02>;
+	compatible = "riscv-virtio";
+	model = "riscv-virtio,qemu";
 
 	chosen {
+		bootargs = "root=/dev/vda ro";
+		stdout-path = "/soc/serial@10000000";
 	};
 
-	firmware {
+	platform-bus@4000000 {
+		interrupt-parent = <0x03>;
+		ranges = <0x00 0x00 0x4000000 0x2000000>;
+		#address-cells = <0x01>;
+		#size-cells = <0x01>;
+		compatible = "qemu,platform\0simple-bus";
 	};
 
-    cpus {
-        #address-cells = <1>;
-        #size-cells = <0>;
-        timebase-frequency = <1000000>;
-
-        cpu@0 {
-            device_type = "cpu";
-            reg = <0>;
-            status = "okay";
-            compatible = "riscv";
-            riscv,isa = "rv64im";
-            clock-frequency = <0>;
-            interrupt-controller {
-                #interrupt-cells = <1>;
-                interrupt-controller;
-                compatible = "riscv,cpu-intc";
-            };
-        };
-    };
-
-    memory@0 {
+	memory@80000000 {
 		device_type = "memory";
-		reg = <0x80000000 0x00800000>;
+		reg = <0x00 0x80000000 0x00 0x00800000>;
+	};
+
+	cpus {
+		#address-cells = <0x01>;
+		#size-cells = <0x00>;
+		timebase-frequency = <0x989680>;
+
+		cpu@0 {
+			phandle = <0x01>;
+			device_type = "cpu";
+			reg = <0x00>;
+			status = "okay";
+			compatible = "riscv";
+			riscv,isa = "rv64im";
+
+			interrupt-controller {
+				#interrupt-cells = <0x01>;
+				interrupt-controller;
+				compatible = "riscv,cpu-intc";
+				phandle = <0x02>;
+			};
+		};
 	};
 
 	soc {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "BuJo,rriscv-soc", "simple-bus";
+		#address-cells = <0x02>;
+		#size-cells = <0x02>;
+		compatible = "simple-bus";
 		ranges;
-		refclk@4000 {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			reg = <0x4000 0x20>;
-			clock-frequency = <1000>;
-			clock-output-names = "xtal";
+
+		serial@10000000 {
+			interrupts = <0x0a>;
+			interrupt-parent = <0x03>;
+			clock-frequency = "\08@";
+			reg = <0x00 0x10000000 0x00 0x100>;
+			compatible = "ns16550a";
 		};
 
-		rom@0 {
-            compatible = "BuJo,bootrom";
-            reg = <0x0 0x1000>;
-            reg-names = "rom";
-        };
+		pci@30000000 {
+			interrupt-map-mask = <0x1800 0x00 0x00 0x07>;
+			interrupt-map = <0x00 0x00 0x00 0x01 0x03 0x20 0x00 0x00 0x00 0x02 0x03 0x21 0x00 0x00 0x00 0x03 0x03 0x22 0x00 0x00 0x00 0x04 0x03 0x23 0x800 0x00 0x00 0x01 0x03 0x21 0x800 0x00 0x00 0x02 0x03 0x22 0x800 0x00 0x00 0x03 0x03 0x23 0x800 0x00 0x00 0x04 0x03 0x20 0x1000 0x00 0x00 0x01 0x03 0x22 0x1000 0x00 0x00 0x02 0x03 0x23 0x1000 0x00 0x00 0x03 0x03 0x20 0x1000 0x00 0x00 0x04 0x03 0x21 0x1800 0x00 0x00 0x01 0x03 0x23 0x1800 0x00 0x00 0x02 0x03 0x20 0x1800 0x00 0x00 0x03 0x03 0x21 0x1800 0x00 0x00 0x04 0x03 0x22>;
+			ranges = <0x1000000 0x00 0x00 0x00 0x3000000 0x00 0x10000 0x2000000 0x00 0x40000000 0x00 0x40000000 0x00 0x40000000 0x3000000 0x04 0x00 0x04 0x00 0x04 0x00>;
+			reg = <0x00 0x30000000 0x00 0x10000000>;
+			dma-coherent;
+			bus-range = <0x00 0xff>;
+			linux,pci-domain = <0x00>;
+			device_type = "pci";
+			compatible = "pci-host-ecam-generic";
+			#size-cells = <0x02>;
+			#interrupt-cells = <0x01>;
+			#address-cells = <0x03>;
+		};
 
-        pic_1: pic@20000000 {
-            reg = < 0x20000000 0x20 >;
-            interrupt-controller;
-            #interrupt-cells = <1>;
-        };
-    };
+		virtio_mmio@10001000 {
+			interrupts = <0x01>;
+			interrupt-parent = <0x03>;
+			reg = <0x00 0x10001000 0x00 0x1000>;
+			compatible = "virtio,mmio";
+		};
 
-    uart@10000000 {
-        compatible = "8250";
-        reg = <0x10000000 0x10>;
-        interrupt-parent = < &pic_1 >;
-        interrupts = <17 4>;
-    };
+		plic@c000000 {
+			phandle = <0x03>;
+			riscv,ndev = <0x5f>;
+			reg = <0x00 0xc000000 0x00 0x600000>;
+			interrupts-extended = <0x02 0x0b 0x02 0x09>;
+			interrupt-controller;
+			compatible = "sifive,plic-1.0.0\0riscv,plic0";
+			#address-cells = <0x00>;
+			#interrupt-cells = <0x01>;
+		};
+
+		clint@2000000 {
+			interrupts-extended = <0x02 0x03 0x02 0x07>;
+			reg = <0x00 0x2000000 0x00 0x10000>;
+			compatible = "sifive,clint0\0riscv,clint0";
+		};
+	};
 };

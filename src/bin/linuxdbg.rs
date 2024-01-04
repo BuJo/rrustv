@@ -1,11 +1,22 @@
+use std::net::TcpListener;
 use std::ops::Range;
 use std::sync::Arc;
 use std::{env, fs};
 
-use log::error;
+use log::{info, LevelFilter};
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
+use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
+use log4rs::append::rolling_file::RollingFileAppender;
+use log4rs::config::{Appender, Root};
+use log4rs::encode::pattern::PatternEncoder;
+use log4rs::filter::threshold::ThresholdFilter;
+use log4rs::Config;
 use object::{Object, ObjectSection};
 
 use rriscv::dynbus::DynBus;
+use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
@@ -16,7 +27,33 @@ use rriscv::virtio::BlkDevice;
 use rriscv::{clint, dt, plic};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    let stdout = ConsoleAppender::builder().build();
+    let rolling = CompoundPolicy::new(
+        Box::new(SizeTrigger::new(5 * 1024 * 1024)),
+        Box::new(
+            FixedWindowRoller::builder()
+                .build("debug.log.{}", 3)
+                .unwrap(),
+        ),
+    );
+    let debug = Appender::builder()
+        .filter(Box::new(ThresholdFilter::new(LevelFilter::Debug)))
+        .build(
+            "riscv",
+            Box::new(
+                RollingFileAppender::builder()
+                    .encoder(Box::new(PatternEncoder::new("{d} {l}::{m}{n}")))
+                    .build("debug.log", Box::new(rolling))?,
+            ),
+        );
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(debug)
+        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
+        .unwrap();
+
+    let _ = log4rs::init_config(config).unwrap();
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
@@ -80,10 +117,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     hart.set_register(treg("a1"), dtb_start as u64);
     hart.set_csr(rriscv::csr::SATP, 0);
 
-    loop {
-        match hart.tick() {
-            Ok(_) => {}
-            Err(err) => error!("err: {:?}", err),
-        }
+    let listener = TcpListener::bind("127.0.0.1:9001").unwrap();
+    info!("Listening on port 9001");
+
+    let debugger = Emulator::new(hart);
+    if let Ok((stream, _addr)) = listener.accept() {
+        info!("Got connection");
+        gdb_remote_protocol::process_packets_from(stream.try_clone().unwrap(), stream, debugger);
     }
+    info!("Connection closed");
+
+    Ok(())
 }

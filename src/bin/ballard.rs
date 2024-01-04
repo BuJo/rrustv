@@ -14,7 +14,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
 
-    let mut bus = DynBus::new();
+    let bus = DynBus::new();
 
     let bin_data = fs::read(image_file).expect("file");
 

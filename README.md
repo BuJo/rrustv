@@ -42,6 +42,7 @@ flowchart LR
 | DTB   | Device Tree Blob                    |
 | HTIF  | Deprecated Host Device              |
 | FESVR | RISC-V Frontend Server              |
+| CLINT | Core Local Interruptor              |
 | PLIC  | Platform-Level Interrupt Controller |
 | AMO   | Atomic Memory Operation             |
 
@@ -134,3 +135,10 @@ limitations under the License.
 * [RISCOF](https://riscof.readthedocs.io/en/latest/installation.html)
 * [HTIF](https://github.com/riscv-software-src/riscv-isa-sim/issues/364)
 * [Spike](https://chipyard.readthedocs.io/en/latest/Software/Spike.html)
+
+### virtio
+
+* [virtio 1.3](https://docs.oasis-open.org/virtio/virtio/v1.3/csd01/virtio-v1.3-csd01.html)
+* [virtio ring - how data travels](https://www.redhat.com/en/blog/virtqueues-and-virtio-ring-how-data-travels)
+* [riscv-emu](https://github.com/sysprog21/riscv-emu/blob/master/virtio.c)
+* [Implementing a virtio-blk driver in my own operating system](https://brennan.io/2020/03/22/sos-block-device/)

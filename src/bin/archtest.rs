@@ -22,7 +22,7 @@ fn main() {
     let elf_file = args.get(1).expect("expect elf file");
     let sig_file = args.get(2);
 
-    let mut bus = DynBus::new();
+    let bus = DynBus::new();
     let mut pc: usize = 0;
 
     let bin_data = fs::read(elf_file).expect("file");
