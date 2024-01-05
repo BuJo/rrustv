@@ -1,5 +1,6 @@
 use crate::device::Device;
 use crate::irq::Interrupt;
+use log::trace;
 use std::io;
 use std::io::{Read, Write};
 
@@ -58,9 +59,30 @@ impl Device for Uart8250 {
                 }
                 Ok(())
             }
-            _ => Err(Interrupt::Unimplemented(
-                "8250: writing to unknown byte address".into(),
-            )),
+            Uart8250::IER => {
+                if val == 0 {
+                    trace!("8250: disabling interrupts");
+                } else {
+                    trace!("8250: enabling interrupts");
+                }
+                Ok(())
+            }
+            Uart8250::FCR => {
+                trace!("8250: FIFO control: {:0b}", val);
+                Ok(())
+            }
+            Uart8250::LCR => {
+                trace!("8250: Line control: {:0b}", val);
+                Ok(())
+            }
+            Uart8250::MCR => {
+                trace!("8250: Modem control: {:0b}", val);
+                Ok(())
+            }
+            _ => Err(Interrupt::Unimplemented(format!(
+                "8250: writing to unknown byte address 0x{:x}: {}",
+                addr, val
+            ))),
         }
     }
 
