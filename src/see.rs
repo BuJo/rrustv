@@ -125,11 +125,7 @@ fn sbi_shutdown(hart: &mut hart::Hart) -> Result<u64, Error> {
 
 // System Reset Extension (EID #0x53525354 "SRST")
 
-fn sbi_system_reset(
-    hart: &mut hart::Hart,
-    reset_type: u64,
-    reset_reason: u64,
-) -> Result<u64, Error> {
+fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u64, reset_reason: u64) -> Result<u64, Error> {
     let reason = match reset_reason {
         0x00000000 => "No reason",
         0x00000001 => "System failure",

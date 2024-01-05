@@ -66,9 +66,7 @@ impl Clint {
 impl Device for Clint {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
-            MTIMECMP_ADDR => self
-                .bus
-                .write_double(self.rtc_addr + rtc::MTIMECMP_ADDR, val),
+            MTIMECMP_ADDR => self.bus.write_double(self.rtc_addr + rtc::MTIMECMP_ADDR, val),
             _ => {
                 trace!("writing double word to 0x{:x} = {}", addr, val);
                 Ok(())
@@ -94,15 +92,11 @@ impl Device for Clint {
     }
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing half word unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing half word unimplemented".into()))
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
@@ -132,15 +126,11 @@ impl Device for Clint {
     }
 
     fn read_half(&self, _addr: usize) -> Result<u16, Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "reading half word unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("reading half word unimplemented".into()))
     }
 
     fn read_byte(&self, _addr: usize) -> Result<u8, Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "reading byte unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("reading byte unimplemented".into()))
     }
 }
 

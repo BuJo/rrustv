@@ -50,21 +50,14 @@ impl Plic {
     }
 
     fn fire_interrupt(&self, source: usize, bits: u32) {
-        debug!(
-            "source {}: setting interrupt bits pending: {:0b}",
-            source, bits
-        );
+        debug!("source {}: setting interrupt bits pending: {:0b}", source, bits);
         let mut sources = self.sources.lock().unwrap();
         let source = sources.entry(source).or_default();
         source.interrupts = bits;
     }
 
     fn set_source_priority(&self, source: usize, priority: u32) {
-        trace!(
-            "source {}: setting interrupt priority: {}",
-            source,
-            priority
-        );
+        trace!("source {}: setting interrupt priority: {}", source, priority);
         let mut sources = self.sources.lock().unwrap();
         let source = sources.entry(source).or_default();
         source.priority = priority;
@@ -128,11 +121,7 @@ impl Plic {
     }
 
     fn set_priority_threshold(&self, context: usize, threshold: u32) {
-        trace!(
-            "context {}: setting priority threshold to {}",
-            context,
-            threshold
-        );
+        trace!("context {}: setting priority threshold to {}", context, threshold);
         let mut contexts = self.contexts.lock().unwrap();
         let context = contexts.entry(context).or_default();
         context.threshold = threshold;
@@ -191,15 +180,11 @@ impl Device for Plic {
     }
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing half word unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing half word unimplemented".into()))
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
@@ -237,14 +222,10 @@ impl Device for Plic {
     }
 
     fn read_half(&self, _addr: usize) -> Result<u16, Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "reading half word unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("reading half word unimplemented".into()))
     }
 
     fn read_byte(&self, _addr: usize) -> Result<u8, Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "reading byte unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("reading byte unimplemented".into()))
     }
 }

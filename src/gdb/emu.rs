@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use gdb_remote_protocol::Signal::{SIGSTOP, SIGTRAP};
 use gdb_remote_protocol::{
-    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont,
-    VContFeature,
+    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont, VContFeature,
 };
 use log::debug;
 
@@ -47,12 +46,7 @@ impl Handler for Emulator {
     fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
         let mut result: Vec<u8> = vec![];
         for i in 0..region.length {
-            result.push(
-                self.hart
-                    .borrow()
-                    .bus
-                    .read_byte((region.address + i) as usize)?,
-            );
+            result.push(self.hart.borrow().bus.read_byte((region.address + i) as usize)?);
         }
         Ok(result)
     }

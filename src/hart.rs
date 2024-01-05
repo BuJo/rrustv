@@ -182,11 +182,7 @@ impl SignExtendable for i64 {
 }
 
 impl Hart {
-    fn execute_instruction(
-        &mut self,
-        instruction: InstructionFormat,
-        ins: Instruction,
-    ) -> Result<(), Interrupt> {
+    fn execute_instruction(&mut self, instruction: InstructionFormat, ins: Instruction) -> Result<(), Interrupt> {
         match instruction {
             // RV32I
 
@@ -361,8 +357,8 @@ impl Hart {
                 rs2,
                 funct7: 0x20,
             } => {
-                let (val, _) = (self.get_register(rs1) as i64)
-                    .overflowing_shr((self.get_register(rs2) & 0b111111) as u32);
+                let (val, _) =
+                    (self.get_register(rs1) as i64).overflowing_shr((self.get_register(rs2) & 0b111111) as u32);
                 self.set_register(rd, val as u64);
 
                 self.dbgins(ins, format!("sra\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
@@ -429,9 +425,7 @@ impl Hart {
                 rs2,
                 funct7: 0b1,
             } => {
-                let (val, _) = self
-                    .get_register(rs1)
-                    .overflowing_mul(self.get_register(rs2));
+                let (val, _) = self.get_register(rs1).overflowing_mul(self.get_register(rs2));
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -444,8 +438,7 @@ impl Hart {
                 rs2,
                 funct7: 0b1,
             } => {
-                let (val, _) = (self.get_register(rs1) as u128)
-                    .overflowing_mul(self.get_register(rs2) as u128);
+                let (val, _) = (self.get_register(rs1) as u128).overflowing_mul(self.get_register(rs2) as u128);
                 self.set_register(rd, (val >> 64) as u64);
                 self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -458,8 +451,8 @@ impl Hart {
                 rs2,
                 funct7: 0b1,
             } => {
-                let (val, _) = (self.get_register(rs1) as i64 as i128)
-                    .overflowing_mul(self.get_register(rs2) as u128 as i128);
+                let (val, _) =
+                    (self.get_register(rs1) as i64 as i128).overflowing_mul(self.get_register(rs2) as u128 as i128);
                 self.set_register(rd, (val >> 64) as u64);
                 self.dbgins(ins, format!("mul\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -545,11 +538,7 @@ impl Hart {
             } => {
                 let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32;
                 let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
-                let val = if divisor == 0 {
-                    0xFFFFFFFF
-                } else {
-                    dividend / divisor
-                };
+                let val = if divisor == 0 { 0xFFFFFFFF } else { dividend / divisor };
                 self.set_register(rd, val.sext());
                 self.dbgins(ins, format!("divuw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -564,11 +553,7 @@ impl Hart {
             } => {
                 let dividend = self.get_register(rs1) as i64;
                 let divisor = self.get_register(rs2) as i64;
-                let val = if divisor == 0 {
-                    dividend
-                } else {
-                    dividend % divisor
-                };
+                let val = if divisor == 0 { dividend } else { dividend % divisor };
                 self.set_register(rd, val as u64);
                 self.dbgins(ins, format!("rem\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -583,11 +568,7 @@ impl Hart {
             } => {
                 let dividend = self.get_register(rs1);
                 let divisor = self.get_register(rs2);
-                let val = if divisor == 0 {
-                    dividend
-                } else {
-                    dividend % divisor
-                };
+                let val = if divisor == 0 { dividend } else { dividend % divisor };
                 self.set_register(rd, val);
                 self.dbgins(ins, format!("remu\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -602,11 +583,7 @@ impl Hart {
             } => {
                 let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32;
                 let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32;
-                let val = if divisor == 0 {
-                    dividend
-                } else {
-                    dividend % divisor
-                };
+                let val = if divisor == 0 { dividend } else { dividend % divisor };
                 self.set_register(rd, val.sext());
                 self.dbgins(ins, format!("remw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -621,11 +598,7 @@ impl Hart {
             } => {
                 let dividend = (self.get_register(rs1) & 0xFFFFFFFF) as u32 as i32;
                 let divisor = (self.get_register(rs2) & 0xFFFFFFFF) as u32 as i32;
-                let val = if divisor == 0 {
-                    dividend
-                } else {
-                    dividend % divisor
-                };
+                let val = if divisor == 0 { dividend } else { dividend % divisor };
                 self.set_register(rd, val.sext());
                 self.dbgins(ins, format!("remuw\t{},{},{}", reg(rd), reg(rs1), reg(rs2)))
             }
@@ -645,10 +618,7 @@ impl Hart {
                 } else {
                     self.set_register(rd, val);
 
-                    self.dbgins(
-                        ins,
-                        format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                    )
+                    self.dbgins(ins, format!("add\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
                 }
             }
             // addiw ADD immediate word
@@ -665,14 +635,10 @@ impl Hart {
 
                     self.dbgins(ins, format!("sext.w\t{},{}", reg(rd), reg(rs1)))
                 } else {
-                    let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
-                        .wrapping_add(imm as i32 as u32);
+                    let val = ((self.get_register(rs1) & 0xFFFFFFFF) as u32).wrapping_add(imm as i32 as u32);
                     self.set_register(rd, val.sext());
 
-                    self.dbgins(
-                        ins,
-                        format!("addw\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                    )
+                    self.dbgins(ins, format!("addw\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
                 }
             }
             // xori XOR immediate
@@ -686,10 +652,7 @@ impl Hart {
                 let val = self.get_register(rs1) ^ imm.sext();
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("xor\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("xor\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // ori OR immediate
             I {
@@ -702,10 +665,7 @@ impl Hart {
                 let val = self.get_register(rs1) | imm as u64;
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("or\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("or\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // andi AND immediate
             I {
@@ -718,10 +678,7 @@ impl Hart {
                 let val = self.get_register(rs1) & imm as u64;
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("and\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("and\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // slli Shift Left Logical Imm
             I {
@@ -746,8 +703,7 @@ impl Hart {
                 rs1,
                 imm,
             } => {
-                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
-                    .overflowing_shl((imm & 0b11111) as u32);
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32).overflowing_shl((imm & 0b11111) as u32);
                 self.set_register(rd, val.sext());
 
                 self.dbgins(ins, format!("sll\t{},{},{:#x}", reg(rd), reg(rs1), imm))
@@ -760,15 +716,10 @@ impl Hart {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x00 => {
-                let (val, _) = self
-                    .get_register(rs1)
-                    .overflowing_shr((imm & 0b111111) as u32);
+                let (val, _) = self.get_register(rs1).overflowing_shr((imm & 0b111111) as u32);
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("srl\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("srl\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // srliw Shift Right Logical Imm
             I {
@@ -778,14 +729,10 @@ impl Hart {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x00 => {
-                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32)
-                    .overflowing_shr((imm & 0b11111) as u32);
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as u32).overflowing_shr((imm & 0b11111) as u32);
                 self.set_register(rd, val.sext());
 
-                self.dbgins(
-                    ins,
-                    format!("srlw\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("srlw\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // srai Shift Right Arith Imm
             I {
@@ -799,10 +746,7 @@ impl Hart {
                 let (val, _) = (self.get_register(rs1) as i64).overflowing_shr(shamt);
                 self.set_register(rd, val.sext());
 
-                self.dbgins(
-                    ins,
-                    format!("sra\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), shamt, val),
-                )
+                self.dbgins(ins, format!("sra\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), shamt, val))
             }
             // sraiw Shift Right Arith Imm
             I {
@@ -812,19 +756,12 @@ impl Hart {
                 rs1,
                 imm,
             } if ((imm as u16) >> 6) == 0x10 => {
-                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as i32)
-                    .overflowing_shr((imm & 0b11111) as u32);
+                let (val, _) = ((self.get_register(rs1) & 0xFFFFFFFF) as i32).overflowing_shr((imm & 0b11111) as u32);
                 self.set_register(rd, val.sext());
 
                 self.dbgins(
                     ins,
-                    format!(
-                        "sraw\t{},{},{:#x} # {:x}",
-                        reg(rd),
-                        reg(rs1),
-                        (imm & 0b11111),
-                        val
-                    ),
+                    format!("sraw\t{},{},{:#x} # {:x}", reg(rd), reg(rs1), (imm & 0b11111), val),
                 )
             }
             // slti Set Less Than Imm
@@ -842,10 +779,7 @@ impl Hart {
                 };
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("slti\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("slti\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
             }
             // sltiu Set Less Than Imm (U, zero extends)
             I {
@@ -855,17 +789,10 @@ impl Hart {
                 rs1,
                 imm,
             } => {
-                let val = if self.get_register(rs1) < (imm as u64) {
-                    1
-                } else {
-                    0
-                };
+                let val = if self.get_register(rs1) < (imm as u64) { 1 } else { 0 };
                 self.set_register(rd, val);
 
-                self.dbgins(
-                    ins,
-                    format!("sltiu\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val),
-                )
+                self.dbgins(ins, format!("sltiu\t{},{},{} # {:x}", reg(rd), reg(rs1), imm, val))
             }
 
             // lb Load Byte
@@ -1099,10 +1026,7 @@ impl Hart {
             } => {
                 let isize = ins.size();
                 let target = self.pc.wrapping_add(imm as usize).wrapping_sub(isize);
-                self.dbgins(
-                    ins,
-                    format!("bgltu\t{},{},{:x}", reg(rs1), reg(rs2), target),
-                );
+                self.dbgins(ins, format!("bgltu\t{},{},{:x}", reg(rs1), reg(rs2), target));
 
                 if self.get_register(rs1) < self.get_register(rs2) {
                     self.pc = target;
@@ -1253,10 +1177,7 @@ impl Hart {
                 }
                 self.csr.write(csr, self.get_register(rs1));
 
-                self.dbgins(
-                    ins,
-                    format!("csrrw\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
-                )
+                self.dbgins(ins, format!("csrrw\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)))
             }
             // csrrs Atomic Read and Set Bits in CSR
             I {
@@ -1271,14 +1192,10 @@ impl Hart {
                 self.set_register(rd, self.csr.read(csr));
 
                 if rs1 != 0 {
-                    self.csr
-                        .write(csr, self.csr.read(csr) | self.get_register(rs1));
+                    self.csr.write(csr, self.csr.read(csr) | self.get_register(rs1));
                 }
 
-                self.dbgins(
-                    ins,
-                    format!("csrrs\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
-                )
+                self.dbgins(ins, format!("csrrs\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)))
             }
             // csrrc Atomic Read and Clear Bits in CSR
             I {
@@ -1294,14 +1211,10 @@ impl Hart {
                 }
 
                 if rs1 != 0 {
-                    self.csr
-                        .write(csr, self.csr.read(csr) & !self.get_register(rs1));
+                    self.csr.write(csr, self.csr.read(csr) & !self.get_register(rs1));
                 }
 
-                self.dbgins(
-                    ins,
-                    format!("csrrc\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)),
-                )
+                self.dbgins(ins, format!("csrrc\t{},{},{}", reg(rd), Csr::name(csr), reg(rs1)))
             }
             // csrrwi
             I {
@@ -1314,10 +1227,7 @@ impl Hart {
                 let csr = (imm as u16 & 0xFFF) as usize;
                 let imm = rs1 as u64;
 
-                self.dbgins(
-                    ins,
-                    format!("csrrwi\t{},{},{}", reg(rd), Csr::name(csr), imm),
-                );
+                self.dbgins(ins, format!("csrrwi\t{},{},{}", reg(rd), Csr::name(csr), imm));
 
                 if rd != 0 {
                     self.set_register(rd, self.csr.read(csr));
@@ -1335,10 +1245,7 @@ impl Hart {
                 let csr = (imm as u16 & 0xFFF) as usize;
                 let imm = rs1 as u64;
 
-                self.dbgins(
-                    ins,
-                    format!("csrrsi\t{},{},{}", reg(rd), Csr::name(csr), imm),
-                );
+                self.dbgins(ins, format!("csrrsi\t{},{},{}", reg(rd), Csr::name(csr), imm));
 
                 self.set_register(rd, self.csr.read(csr));
 
@@ -1357,10 +1264,7 @@ impl Hart {
                 let csr = (imm as u16 & 0xFFF) as usize;
                 let imm = rs1 as u64;
 
-                self.dbgins(
-                    ins,
-                    format!("csrrci\t{},{},{}", reg(rd), Csr::name(csr), imm),
-                );
+                self.dbgins(ins, format!("csrrci\t{},{},{}", reg(rd), Csr::name(csr), imm));
 
                 if rd != 0 {
                     self.set_register(rd, self.csr.read(csr));
@@ -1382,13 +1286,7 @@ impl Hart {
                 ..
             } => self.dbgins(
                 ins,
-                format!(
-                    "system\t{},{},{} # {:08x}",
-                    reg(rd),
-                    reg(rs1),
-                    reg(rs2),
-                    ins
-                ),
+                format!("system\t{},{},{} # {:08x}", reg(rd), reg(rs1), reg(rs2), ins),
             ),
 
             // Atomics
@@ -1410,96 +1308,63 @@ impl Hart {
                 let new = match funct5 {
                     // lr.w
                     0x02 => {
-                        self.dbgins(
-                            ins,
-                            format!("lr.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("lr.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         // XXX: should register a reservation on `addr`
                         val
                     }
                     // sc.w
                     0x03 => {
-                        self.dbgins(
-                            ins,
-                            format!("sc.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("sc.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         // XXX: should test for reservation on `addr`
                         val = 0; // Success, non-zero on failure
                         rs2val
                     }
                     // amoswap.w
                     0x01 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoswap.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoswap.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         let rdval = self.get_register(rd);
                         self.set_register(rs2, rdval);
                         rs2val
                     }
                     // amoadd.w
                     0x00 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoadd.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoadd.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
 
                         val.wrapping_add(rs2val)
                     }
                     // amoand.w
                     0x0C => {
-                        self.dbgins(
-                            ins,
-                            format!("amoand.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoand.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val & rs2val
                     }
                     // amoor.w
                     0x08 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val | rs2val
                     }
                     // amoxor.w
                     0x04 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoxor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoxor.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val ^ rs2val
                     }
                     // amomax.w
                     0x14 => {
-                        self.dbgins(
-                            ins,
-                            format!("amomax.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomax.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::max(val as i32, rs2val as i32) as u32
                     }
                     // amomin.w
                     0x10 => {
-                        self.dbgins(
-                            ins,
-                            format!("amomin.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomin.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::min(val as i32, rs2val as i32) as u32
                     }
                     // amomaxu.w
                     0x1C => {
-                        self.dbgins(
-                            ins,
-                            format!("amomaxu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomaxu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::max(val, rs2val)
                     }
                     // amominu.w
                     0x18 => {
-                        self.dbgins(
-                            ins,
-                            format!("amominu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amominu.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::min(val, rs2val)
                     }
                     _ => return Err(IllegalOpcode(ins)),
@@ -1526,96 +1391,63 @@ impl Hart {
                 let new = match funct5 {
                     // lr.d
                     0x02 => {
-                        self.dbgins(
-                            ins,
-                            format!("lr.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("lr.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         // XXX: should register a reservation on `addr`
                         val
                     }
                     // sc.d
                     0x03 => {
-                        self.dbgins(
-                            ins,
-                            format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("sc.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         // XXX: should test for reservation on `addr`
                         val = 0; // Success, non-zero on failure
                         rs2val
                     }
                     // amoswap.d
                     0x01 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoswap.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoswap.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         let rdval = self.get_register(rd);
                         self.set_register(rs2, rdval);
                         rs2val
                     }
                     // amoadd.d
                     0x00 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoadd.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoadd.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
 
                         val.wrapping_add(rs2val)
                     }
                     // amoand.d
                     0x0C => {
-                        self.dbgins(
-                            ins,
-                            format!("amoand.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoand.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val & rs2val
                     }
                     // amoor.d
                     0x08 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val | rs2val
                     }
                     // amoxor.d
                     0x04 => {
-                        self.dbgins(
-                            ins,
-                            format!("amoxor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amoxor.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         val ^ rs2val
                     }
                     // amomax.d
                     0x14 => {
-                        self.dbgins(
-                            ins,
-                            format!("amomax.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomax.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::max(val as i64, rs2val as i64) as u64
                     }
                     // amomin.d
                     0x10 => {
-                        self.dbgins(
-                            ins,
-                            format!("amomin.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomin.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::min(val as i64, rs2val as i64) as u64
                     }
                     // amomaxu.d
                     0x1C => {
-                        self.dbgins(
-                            ins,
-                            format!("amomaxu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amomaxu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::max(val, rs2val)
                     }
                     // amominu.d
                     0x18 => {
-                        self.dbgins(
-                            ins,
-                            format!("amominu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)),
-                        );
+                        self.dbgins(ins, format!("amominu.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
                         cmp::min(val, rs2val)
                     }
                     _ => return Err(IllegalOpcode(ins)),
@@ -1639,8 +1471,7 @@ impl Hart {
         // Note that synchronous exceptions (like ebreak/ecall) do not increase the count of
         // retired instructions.  This means, any time an instruction needs to skip the `minstret`
         // increase, it should do an early return in the match expression.
-        self.csr
-            .write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
+        self.csr.write(csr::MINSTRET, self.csr.read(csr::MINSTRET) + 1);
 
         Ok(())
     }

@@ -166,9 +166,7 @@ pub struct Csr {
 
 impl Csr {
     pub fn new(id: u64) -> Csr {
-        let mut csr = Self {
-            csrs: [0; NUM_CSRS],
-        };
+        let mut csr = Self { csrs: [0; NUM_CSRS] };
 
         // RV32 I
         csr.csrs[MISA] = 0b01 << (XLEN - 2) | 1 << 8;

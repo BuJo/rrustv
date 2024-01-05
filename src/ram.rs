@@ -14,9 +14,7 @@ impl Ram {
     pub fn new() -> Ram {
         let ram = vec![0; DRAM_SIZE];
 
-        Self {
-            data: RwLock::new(ram),
-        }
+        Self { data: RwLock::new(ram) }
     }
 
     pub fn size(&self) -> usize {

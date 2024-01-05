@@ -38,11 +38,7 @@ impl Display for VirtqDesc {
         if self.flags & VirtqDesc::INDIRECT > 0 {
             flags.push("indirect");
         }
-        write!(
-            f,
-            "virtq[0x{:x} {}] {:?} -> {}",
-            self.addr, self.len, flags, self.next
-        )
+        write!(f, "virtq[0x{:x} {}] {:?} -> {}", self.addr, self.len, flags, self.next)
     }
 }
 

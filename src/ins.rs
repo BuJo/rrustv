@@ -318,8 +318,8 @@ impl Instruction {
                     0b011 => {
                         let rs1 = ((instruction >> 7) & 0b111) as u8;
                         let rd = ((instruction >> 2) & 0b111) as u8;
-                        let imm = (((instruction >> 10) as u8 & 0b111) << 3)
-                            | (((instruction >> 5) as u8 & 0b11) << 6);
+                        let imm =
+                            (((instruction >> 10) as u8 & 0b111) << 3) | (((instruction >> 5) as u8 & 0b11) << 6);
                         I {
                             opcode: 0b0000011,
                             rd: rd + RVC_REG_OFFSET,
@@ -332,8 +332,8 @@ impl Instruction {
                     0b111 => {
                         let rs1 = ((instruction >> 7) & 0b111) as u8;
                         let rs2 = ((instruction >> 2) & 0b111) as u8;
-                        let imm = (((instruction >> 10) as u8 & 0b111) << 3)
-                            | (((instruction >> 5) as u8 & 0b11) << 6);
+                        let imm =
+                            (((instruction >> 10) as u8 & 0b111) << 3) | (((instruction >> 5) as u8 & 0b11) << 6);
                         S {
                             opcode: 0b0100011,
                             funct3: 0x3,
@@ -372,8 +372,8 @@ impl Instruction {
                     0b000 => {
                         // addi x0, x0, 0
                         let rd = ((instruction >> 7) & 0b11111) as u8;
-                        let imm = ((((instruction >> 2) & 0b11111) as u8) << 2)
-                            | ((((instruction >> 12) & 0b1) as u8) << 7);
+                        let imm =
+                            ((((instruction >> 2) & 0b11111) as u8) << 2) | ((((instruction >> 12) & 0b1) as u8) << 7);
                         let imm = (imm as i8) >> 2;
 
                         I {
@@ -388,8 +388,8 @@ impl Instruction {
                     0b001 => {
                         // addi x0, x0, 0
                         let rd = ((instruction >> 7) & 0b11111) as u8;
-                        let imm = ((((instruction >> 2) & 0b11111) as u8) << 2)
-                            | ((((instruction >> 12) & 0b1) as u8) << 7);
+                        let imm =
+                            ((((instruction >> 2) & 0b11111) as u8) << 2) | ((((instruction >> 12) & 0b1) as u8) << 7);
                         let imm = (imm as i8) >> 2;
                         I {
                             opcode: 0b0011011,
@@ -403,8 +403,8 @@ impl Instruction {
                     0b010 => {
                         let rd = ((instruction >> 7) & 0b11111) as u8;
                         //  nzuimm[5|4:0]
-                        let imm = (((instruction >> 12) as u8 & 0b1) << 7)
-                            | (((instruction >> 2) as u8 & 0b11111) << 2);
+                        let imm =
+                            (((instruction >> 12) as u8 & 0b1) << 7) | (((instruction >> 2) as u8 & 0b11111) << 2);
                         let imm = (imm as i8) >> 2;
                         I {
                             opcode: 0b0010011,
@@ -438,8 +438,8 @@ impl Instruction {
                         } else {
                             // c.lui
                             //  nzuimm[5|4:0]
-                            let imm = (((instruction >> 12) as u8 & 0b1) << 7)
-                                | (((instruction >> 2) as u8 & 0b11111) << 2);
+                            let imm =
+                                (((instruction >> 12) as u8 & 0b1) << 7) | (((instruction >> 2) as u8 & 0b11111) << 2);
                             let imm = (imm as i8) >> 2;
 
                             U {
@@ -453,8 +453,7 @@ impl Instruction {
                         let funct2 = (instruction >> 10) & 0b11;
                         let rd = (instruction >> 7) as u8 & 0b111;
                         // imm/shamt[5] imm/shamt[4:0]
-                        let imm = (((instruction >> 12) as u8 & 0b1) << 5)
-                            | ((instruction >> 2) as u8 & 0b11111);
+                        let imm = (((instruction >> 12) as u8 & 0b1) << 5) | ((instruction >> 2) as u8 & 0b11111);
 
                         // CR-Type: c.srli/c.srai/c.andi
                         match funct2 {
@@ -631,8 +630,7 @@ impl Instruction {
                     // CI-Type: c.slli
                     0b0000 | 0b0001 => {
                         // imm/shamt[5] imm/shamt[4:0]
-                        let imm = ((((instruction >> 12) as u8) & 0b1) << 5)
-                            | (((instruction >> 2) as u8) & 0b11111);
+                        let imm = ((((instruction >> 12) as u8) & 0b1) << 5) | (((instruction >> 2) as u8) & 0b11111);
                         I {
                             opcode: 0b0010011,
                             rd: rs1,
@@ -727,8 +725,8 @@ impl Instruction {
                     // CSS-Type: c.swsp x4, 0
                     0b1100 | 0b1101 => {
                         //  uimm[5:2|7:6]
-                        let imm = (((instruction >> 9) as u8 & 0b1111) << 2)
-                            | (((instruction >> 7) as u8 & 0b11) << 6);
+                        let imm =
+                            (((instruction >> 9) as u8 & 0b1111) << 2) | (((instruction >> 7) as u8 & 0b11) << 6);
                         S {
                             opcode: 0b0100011,
                             funct3: 0x2,
@@ -740,8 +738,7 @@ impl Instruction {
                     // CSS-Type: c.sdsp x4, 0
                     0b1110 | 0b1111 => {
                         //  uimm[5:3|8:6]
-                        let imm =
-                            ((instruction >> 10 & 0b111) << 3) | ((instruction >> 7 & 0b111) << 6);
+                        let imm = ((instruction >> 10 & 0b111) << 3) | ((instruction >> 7 & 0b111) << 6);
                         S {
                             opcode: 0b0100011,
                             funct3: 0x3,

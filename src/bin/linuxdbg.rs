@@ -30,11 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();
     let rolling = CompoundPolicy::new(
         Box::new(SizeTrigger::new(5 * 1024 * 1024)),
-        Box::new(
-            FixedWindowRoller::builder()
-                .build("debug.log.{}", 3)
-                .unwrap(),
-        ),
+        Box::new(FixedWindowRoller::builder().build("debug.log.{}", 3).unwrap()),
     );
     let debug = Appender::builder()
         .filter(Box::new(ThresholdFilter::new(LevelFilter::Debug)))

@@ -172,10 +172,7 @@ impl BlkDevice {
             sector_num: self.bus.read_double(hdr_desc.addr + 8).unwrap(),
         };
 
-        info!(
-            "request {} header 0x{:x} says: {:?}",
-            head_idx, hdr_desc.addr, req
-        );
+        info!("request {} header 0x{:x} says: {:?}", head_idx, hdr_desc.addr, req);
 
         let buf_desc = self.get_desc(queue, hdr_desc.next);
 
@@ -184,8 +181,7 @@ impl BlkDevice {
                 // driver wants to read data
                 let file = self.file.write().unwrap();
                 let mut space = vec![0; buf_desc.len as usize];
-                file.read_exact_at(&mut space, req.sector_num * 512)
-                    .unwrap();
+                file.read_exact_at(&mut space, req.sector_num * 512).unwrap();
                 for (i, b) in space.iter().enumerate() {
                     self.bus.write_byte(buf_desc.addr + i, *b).unwrap();
                 }
@@ -224,9 +220,7 @@ impl BlkDevice {
 
 impl Device for BlkDevice {
     fn write_double(&self, _addr: usize, _val: u64) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing double unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing double unimplemented".into()))
     }
 
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
@@ -327,12 +321,7 @@ impl Device for BlkDevice {
                     addr += 16 * next;
                 }
 
-                info!(
-                    "queue {} to process: {:?}: {}",
-                    idx,
-                    queue,
-                    VirtDescs(&descriptors)
-                );
+                info!("queue {} to process: {:?}: {}", idx, queue, VirtDescs(&descriptors));
 
                 // Avail == driver queue.  Device must only read.
                 let baddr = queue.driver;
@@ -344,10 +333,7 @@ impl Device for BlkDevice {
                     ring_contents.push(ring);
                 }
 
-                info!(
-                    "queue {} avail: {} 0b{:016b}: {:?}",
-                    idx, bflags, bidx, ring_contents
-                );
+                info!("queue {} avail: {} 0b{:016b}: {:?}", idx, bflags, bidx, ring_contents);
 
                 // Used == device queue.  Device can write.
                 let baddr = queue.device;
@@ -359,10 +345,7 @@ impl Device for BlkDevice {
                     ring_contents.push(ring);
                 }
 
-                info!(
-                    "queue {} used: {} 0b{:016b}: {:?}",
-                    idx, bflags, bidx, ring_contents
-                );
+                info!("queue {} used: {} 0b{:016b}: {:?}", idx, bflags, bidx, ring_contents);
 
                 // XXX: lying, current index might be different
                 let mut current_idx = 0;
@@ -371,11 +354,7 @@ impl Device for BlkDevice {
                     // index of head descriptor for current item
                     let head_idx = self
                         .bus
-                        .read_half(
-                            queue.driver
-                                + 4
-                                + (current_idx as usize & (queue.size as usize - 1)) * 2,
-                        )
+                        .read_half(queue.driver + 4 + (current_idx as usize & (queue.size as usize - 1)) * 2)
                         .unwrap();
                     let (read_size, write_size) = self.get_desc_rw_size(queue, head_idx);
                     info!(
@@ -443,15 +422,11 @@ impl Device for BlkDevice {
     }
 
     fn write_half(&self, _addr: usize, _val: u16) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing half word unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing half word unimplemented".into()))
     }
 
     fn write_byte(&self, _addr: usize, _val: u8) -> Result<(), Interrupt> {
-        Err(Interrupt::Unimplemented(
-            "writing byte unimplemented".into(),
-        ))
+        Err(Interrupt::Unimplemented("writing byte unimplemented".into()))
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {

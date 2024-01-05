@@ -94,8 +94,7 @@ fn write_signature(sig_file: &String, bus: Arc<DynBus>, elf: object::File) {
     let mut addr = begin_signature;
     while addr < end_signature {
         let word = bus.read_word(addr).expect("ram");
-        f.write_all(format!("{:08x}", word).as_bytes())
-            .expect("writing sig");
+        f.write_all(format!("{:08x}", word).as_bytes()).expect("writing sig");
 
         f.write_all("\n".as_bytes()).expect("writing sig");
         addr += 4;
