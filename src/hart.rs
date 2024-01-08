@@ -1,5 +1,5 @@
-use std::cmp;
 use std::sync::Arc;
+use std::{cmp, mem};
 
 use log::{debug, trace, warn};
 
@@ -12,7 +12,7 @@ use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
 use crate::irq::Interrupt;
 use crate::irq::Interrupt::{Halt, IllegalOpcode, Unimplemented};
-use crate::reg::reg;
+use crate::reg::{fpreg, reg};
 use crate::see;
 
 pub struct Hart {
@@ -20,6 +20,7 @@ pub struct Hart {
 
     pub(crate) bus: Arc<DynBus>,
     registers: [u64; 32],
+    fp_regs: [f64; 32],
     pc: usize,
     csr: Csr,
 
@@ -32,6 +33,7 @@ impl Hart {
             start_pc: pc,
             bus,
             registers: [0; 32],
+            fp_regs: [0.0; 32],
             pc,
             csr: Csr::new(id),
             stop: false,
@@ -96,7 +98,6 @@ impl Hart {
 
         match res {
             Ok(_) => Ok(()),
-            Err(Interrupt::MemoryFault(0)) => Ok(()), // Ignore zero-reads/writes
             Err(err) => {
                 debug!("hart fault: {:?}", err);
                 Err(err)
@@ -972,7 +973,7 @@ impl Hart {
                 rs2,
                 imm,
             } => {
-                let addr = (self.get_register(rs1).wrapping_add(imm.sext())) as usize;
+                let addr = self.get_register(rs1).wrapping_add(imm.sext()) as usize;
                 let val = self.get_register(rs2);
 
                 self.dbgins(ins, format!("sd\t{},{}({})", reg(rs2), imm, reg(rs1)));
@@ -1128,6 +1129,36 @@ impl Hart {
                 self.set_register(rd, val);
 
                 self.dbgins(ins, format!("auipc\t{},{:#x}", reg(rd), imm))
+            }
+
+            // XXX: Floating point
+            // fld
+            I {
+                opcode: 0b0000111,
+                funct3: 0x3,
+                rd,
+                rs1,
+                imm,
+            } => {
+                let offset = imm;
+                let addr = self.get_register(rs1).wrapping_add(offset.sext());
+                let val: f64 = unsafe { mem::transmute(self.bus.read_double(addr as usize)?) };
+                self.fp_regs[rd as usize] = val;
+                self.dbgins(ins, format!("fld\t{},{},{}", fpreg(rd), reg(rs1), offset))
+            }
+            // fsd
+            S {
+                opcode: 0b0100111,
+                funct3: 0x3,
+                rs1,
+                rs2,
+                imm,
+            } => {
+                let offset = imm;
+                let addr = self.get_register(rs1).wrapping_add(offset.sext());
+                let val: u64 = unsafe { mem::transmute(self.fp_regs[rs2 as usize]) };
+                self.bus.write_double(addr as usize, val)?;
+                self.dbgins(ins, format!("fsd\t{},{}({})", fpreg(rs2), offset, reg(rs1)))
             }
 
             // RV32 Zifencei

@@ -359,6 +359,46 @@ impl Instruction {
                             imm: imm.overflowing_mul(4).0 as i16,
                         }
                     }
+                    // XXX: floating point? linux needs it...
+                    // CI-Type: c.fld -> fld rd',offset[7:3](rs1')
+                    0b001 => {
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let rd = ((instruction >> 2) & 0b111) as u8;
+                        let imm =
+                            (((instruction >> 10) as u8 & 0b111) << 3) | (((instruction >> 5) as u8 & 0b11) << 6);
+                        I {
+                            opcode: 0b0000111,
+                            funct3: 0x3,
+                            rd,
+                            rs1,
+                            imm: imm as u16 as i16,
+                        }
+                    }
+                    // CS-Type: c.fsd -> fsd rs2',offset[7:3](rs1')
+                    0b101 => {
+                        let rs1 = ((instruction >> 7) & 0b111) as u8;
+                        let rs2 = ((instruction >> 2) & 0b111) as u8;
+                        let imm =
+                            (((instruction >> 10) as u8 & 0b111) << 3) | (((instruction >> 5) as u8 & 0b11) << 6);
+                        S {
+                            opcode: 0b0100111,
+                            funct3: 0x3,
+                            rs1: rs1 + RVC_REG_OFFSET,
+                            rs2: rs2 + RVC_REG_OFFSET,
+                            imm: imm as i16,
+                        }
+                    }
+                    // XXX: Reserved instruction as of riscv-compressed-spec v1.9?
+                    0b100 => {
+                        // nop
+                        I {
+                            opcode: 0b0010011,
+                            rd: 0,
+                            funct3: 0x0,
+                            rs1: 0,
+                            imm: 0,
+                        }
+                    }
                     _ => {
                         return Err(InstructionDecodingError);
                     }
