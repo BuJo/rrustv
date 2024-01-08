@@ -17,8 +17,14 @@ impl Ram {
         Self { data: RwLock::new(ram) }
     }
 
+    pub fn sized(size: usize) -> Ram {
+        let ram = vec![0; size];
+
+        Self { data: RwLock::new(ram) }
+    }
+
     pub fn size(&self) -> usize {
-        DRAM_SIZE
+        self.data.read().unwrap().len()
     }
 
     pub fn write(&self, addr: usize, code: Vec<u8>) -> Option<()> {
