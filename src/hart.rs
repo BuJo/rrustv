@@ -11,7 +11,7 @@ use crate::device::Device;
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
 use crate::irq::Interrupt;
-use crate::irq::Interrupt::{Halt, IllegalOpcode};
+use crate::irq::Interrupt::{Halt, IllegalOpcode, Unimplemented};
 use crate::reg::reg;
 use crate::see;
 
@@ -56,8 +56,34 @@ impl Hart {
             return Err(Halt);
         }
 
-        if let Some(irq) = clint::interrupt(self) {
-            warn!("skipping interrupt: {}", irq);
+        if let Some(cause) = clint::interrupt(self) {
+            self.csr.write(csr::MEPC, self.pc as u64);
+            self.csr.write(csr::MCAUSE, cause);
+            self.csr.write(csr::MIE, 0);
+
+            let base = self.csr.read(csr::MTVEC) as usize & !0b11;
+            let mode = self.csr.read(csr::MTVEC) & 0b11;
+            let pc = match mode {
+                0b00 => {
+                    // Direct mode
+                    base
+                }
+                0b01 => {
+                    // Vectored mode
+                    (base % 128) + 4 * ((cause as usize >> 1) << 1)
+                }
+                _ => {
+                    // Reserved
+                    return Err(Unimplemented("reserved mtvec mode".into()));
+                }
+            };
+            self.pc = pc;
+            warn!(
+                "interrupt {:b}|{}: jumping to 0x{:x}",
+                cause >> 63,
+                (cause << 1) >> 1,
+                base
+            );
         }
 
         let res = self

@@ -6,6 +6,8 @@ use log::{debug, trace, warn};
 use crate::device::Device;
 use crate::irq::Interrupt;
 
+pub const PLIC_BASE: usize = 0xc000000;
+
 struct Context {
     claimed: bool,
     threshold: u32,
@@ -47,6 +49,18 @@ impl Plic {
             sources: Mutex::new(HashMap::new()),
             contexts: Mutex::new(HashMap::new()),
         }
+    }
+
+    fn has_interrupt(&self) -> u32 {
+        let sources = self.sources.lock().unwrap();
+
+        for (_, src) in sources.iter() {
+            if src.interrupts > 0 {
+                return 1;
+            }
+        }
+
+        0
     }
 
     fn fire_interrupt(&self, source: usize, bits: u32) {
@@ -197,6 +211,7 @@ impl Device for Plic {
                 let source = addr / 4;
                 Ok(self.get_source_priority(source))
             }
+            0x001000 => Ok(self.has_interrupt()),
             0x002000..=0x1F1FFC => {
                 let base = addr - 0x002000;
                 let ctx = base / 0x80;

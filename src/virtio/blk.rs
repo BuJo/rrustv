@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 use std::sync::{Arc, RwLock};
@@ -7,7 +8,8 @@ use log::{info, trace};
 use crate::bus::DynBus;
 use crate::device::Device;
 use crate::irq::Interrupt;
-use crate::virtio::{Features, Queue, Register, Sel, State, Status, VirtDescs, VirtqDesc};
+use crate::plic;
+use crate::virtio::{Descriptor, Features, Queue, Register, Sel, State, Status, VirtDescs};
 
 #[allow(non_snake_case)]
 pub struct BlkDevice {
@@ -69,6 +71,13 @@ impl BlkConfig {
     const MODEL: usize = 92;
 }
 
+struct Request<'a> {
+    header: &'a RequestHeader,
+    queue: &'a Queue,
+    desc: &'a Descriptor,
+    buffer: &'a mut Vec<u8>,
+}
+
 #[derive(Debug)]
 struct RequestHeader {
     typ: RequestType,
@@ -80,6 +89,12 @@ struct RequestHeader {
 enum RequestType {
     In = 0,
     Out = 1,
+}
+
+enum RequestStatus {
+    OK = 0,
+    IoError = 1,
+    Unsupported = 2,
 }
 
 impl TryFrom<u32> for RequestType {
@@ -135,6 +150,7 @@ impl BlkDevice {
                     desc: 0,
                     driver: 0,
                     device: 0,
+                    avail_idx: 0,
                 };
                 BlkDevice::MAX_QUEUES
             ]),
@@ -148,13 +164,13 @@ impl BlkDevice {
         loop {
             let desc = self.get_desc(queue, desc_idx);
 
-            if desc.flags & VirtqDesc::WRITE > 0 {
+            if desc.flags & Descriptor::WRITE > 0 {
                 write_size += desc.len;
             } else {
                 read_size += desc.len;
             }
 
-            if desc.flags & VirtqDesc::NEXT > 0 {
+            if desc.flags & Descriptor::NEXT > 0 {
                 break;
             }
             desc_idx = desc.next;
@@ -174,47 +190,103 @@ impl BlkDevice {
 
         info!("request {} header 0x{:x} says: {:?}", head_idx, hdr_desc.addr, req);
 
+        let mut req = Request {
+            queue,
+            header: &req,
+            desc: &hdr_desc,
+            buffer: &mut Vec::with_capacity(1),
+        };
+
         let buf_desc = self.get_desc(queue, hdr_desc.next);
 
-        match req.typ {
+        match req.header.typ {
             RequestType::In => {
                 // driver wants to read data
-                let file = self.file.write().unwrap();
-                let mut space = vec![0; buf_desc.len as usize];
-                file.read_exact_at(&mut space, req.sector_num * 512).unwrap();
-                for (i, b) in space.iter().enumerate() {
-                    self.bus.write_byte(buf_desc.addr + i, *b).unwrap();
+                match self.file_read(&mut req, &buf_desc) {
+                    Ok(_) => {
+                        req.buffer.push(RequestStatus::OK as u8);
+                    }
+                    Err(_) => {
+                        req.buffer.truncate(0);
+                        req.buffer.push(RequestStatus::IoError as u8);
+                    }
                 }
-                info!(
-                    "request {} read sector {} (byte offset {}) len {} from block device",
-                    head_idx,
-                    req.sector_num,
-                    req.sector_num * 512,
-                    buf_desc.len as usize
-                );
             }
             RequestType::Out => {
                 // driver wants to write data
                 info!(
                     "request {} writing sector {} from block device",
-                    head_idx, req.sector_num
+                    head_idx, req.header.sector_num
                 );
+                req.buffer.push(RequestStatus::Unsupported as u8);
             }
         }
 
         let status_desc = self.get_desc(queue, hdr_desc.next);
         let status = self.bus.read_byte(status_desc.addr).unwrap();
         info!("request {} status {}:", head_idx, status);
+
+        self.consume_desc(&req);
     }
 
-    fn get_desc(&self, queue: &Queue, desc_idx: u16) -> VirtqDesc {
+    fn file_read(&self, req: &mut Request, buf_desc: &Descriptor) -> Result<(), Box<dyn Error + '_>> {
+        let file = self.file.write()?;
+
+        req.buffer.resize(buf_desc.len as usize, 0);
+        file.read_exact_at(req.buffer.as_mut_slice(), req.header.sector_num * 512)
+            .unwrap();
+
+        for (i, b) in req.buffer.iter().enumerate() {
+            self.bus.write_byte(buf_desc.addr + i, *b)?;
+        }
+
+        info!(
+            "request {} read sector {} (byte offset {}) len {} from block device",
+            req.desc.idx,
+            req.header.sector_num,
+            req.header.sector_num * 512,
+            buf_desc.len as usize
+        );
+        Ok(())
+    }
+
+    fn consume_desc(&self, req: &Request) {
+        let addr = req.queue.device + 2;
+        let idx = self.bus.read_half(addr).unwrap();
+        self.bus.write_half(addr, idx + 1).unwrap();
+
+        let addr = req.queue.device + 4 + (idx as usize & (req.queue.size as usize - 1)) * 8;
+        self.bus.write_word(addr, req.desc.idx as u32).unwrap();
+        self.bus.write_word(addr + 4, req.buffer.len() as u32).unwrap();
+
+        let irq = 1;
+        self.bus.write_word(plic::PLIC_BASE + 0x001000 + irq, 1).unwrap(); // XXX: bad.
+    }
+
+    fn get_desc(&self, queue: &Queue, desc_idx: u16) -> Descriptor {
         let addr = queue.desc + 16 * desc_idx as usize;
-        VirtqDesc {
+        Descriptor {
             addr: self.bus.read_double(addr).unwrap() as usize,
             len: self.bus.read_word(addr + 8).unwrap(),
             flags: self.bus.read_half(addr + 12).unwrap(),
+            idx: desc_idx,
             next: self.bus.read_half(addr + 14).unwrap(),
         }
+    }
+
+    fn get_desc_chain(&self, queue: &Queue, mut desc_idx: u16) -> Vec<Descriptor> {
+        let mut descriptors = vec![];
+        loop {
+            let desc = self.get_desc(queue, desc_idx);
+            let next = desc.next;
+            descriptors.push(desc);
+            if next == 0 {
+                break;
+            }
+            desc_idx = next;
+        }
+
+        descriptors
     }
 }
 
@@ -302,25 +374,9 @@ impl Device for BlkDevice {
             Register::QueueNotify => {
                 // notifies that there are new buffers set up to process in the queue
                 let idx = val;
-                let queue = &queues[idx as usize];
-                let mut addr = queue.desc;
+                let queue = queues.get_mut(idx as usize).unwrap();
 
-                let mut descriptors: Vec<VirtqDesc> = vec![];
-                loop {
-                    let desc = VirtqDesc {
-                        addr: self.bus.read_double(addr).unwrap() as usize,
-                        len: self.bus.read_word(addr + 8).unwrap(),
-                        flags: self.bus.read_half(addr + 12).unwrap(),
-                        next: self.bus.read_half(addr + 14).unwrap(),
-                    };
-                    let next = desc.next as usize;
-                    descriptors.push(desc);
-                    if next == 0 {
-                        break;
-                    }
-                    addr += 16 * next;
-                }
-
+                let descriptors = self.get_desc_chain(queue, queue.avail_idx);
                 info!("queue {} to process: {:?}: {}", idx, queue, VirtDescs(&descriptors));
 
                 // Avail == driver queue.  Device must only read.
@@ -347,23 +403,21 @@ impl Device for BlkDevice {
 
                 info!("queue {} used: {} 0b{:016b}: {:?}", idx, bflags, bidx, ring_contents);
 
-                // XXX: lying, current index might be different
-                let mut current_idx = 0;
                 let avail_idx = self.bus.read_half(queue.driver + 2).unwrap();
-                while current_idx != avail_idx {
+                while queue.avail_idx != avail_idx {
                     // index of head descriptor for current item
                     let head_idx = self
                         .bus
-                        .read_half(queue.driver + 4 + (current_idx as usize & (queue.size as usize - 1)) * 2)
+                        .read_half(queue.driver + 4 + (queue.avail_idx as usize & (queue.size as usize - 1)) * 2)
                         .unwrap();
                     let (read_size, write_size) = self.get_desc_rw_size(queue, head_idx);
                     info!(
                         "queue {} ({}->{}) read: {} bytes, write {} bytes",
-                        idx, current_idx, avail_idx, read_size, write_size
+                        idx, queue.avail_idx, avail_idx, read_size, write_size
                     );
 
                     self.recv_request(queue, head_idx);
-                    current_idx += 1;
+                    queue.avail_idx += 1;
                 }
 
                 Ok(())
@@ -373,15 +427,11 @@ impl Device for BlkDevice {
                 Ok(())
             }
             Register::QueueDescHigh => {
-                queues[state.queue_idx].desc |= (val as usize) << 32;
-                let addr = queues[state.queue_idx].desc;
+                let queue = queues.get_mut(state.queue_idx).unwrap();
+                queue.desc |= (val as usize) << 32;
+                let addr = queue.desc;
 
-                let desc = VirtqDesc {
-                    addr: self.bus.read_double(addr).unwrap() as usize,
-                    len: self.bus.read_word(addr + 8).unwrap(),
-                    flags: self.bus.read_half(addr + 12).unwrap(),
-                    next: self.bus.read_half(addr + 14).unwrap(),
-                };
+                let desc = self.get_desc(queue, 0);
 
                 info!(
                     "queue {}: setting descriptor area: 0x{:x}: {}",

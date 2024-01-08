@@ -8,13 +8,18 @@ use crate::bus::DynBus;
 use crate::device::Device;
 use crate::hart::Hart;
 use crate::irq::Interrupt;
-use crate::{csr, rtc};
+use crate::{csr, plic, rtc};
 
-pub const MSIP_HART0_ADDR: usize = 0x0;
-pub const MSIP_HART4095_ADDR: usize = 0x3FFC;
+pub const CLINT_BASE: usize = 0x2000000;
+
+const MSIP_HART0_ADDR: usize = 0x0;
+const MSIP_HART4095_ADDR: usize = 0x3FFC;
+
 pub const MTIME_ADDR: usize = 0xbff8;
 pub const MTIME_ADDRH: usize = 0xbffc;
 pub const MTIMECMP_ADDR: usize = 0x4000;
+
+pub const PLIC_EIP_ADDR: usize = 0x001000;
 
 #[allow(unused)]
 enum PrivilegeLevel {
@@ -112,8 +117,7 @@ impl Device for Clint {
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         match addr {
             MSIP_HART0_ADDR..MSIP_HART4095_ADDR => {
-                let hartid = (addr - MSIP_HART0_ADDR) / 4;
-                trace!("checking if hart {} interrupted via MIP", hartid);
+                let _hartid = (addr - MSIP_HART0_ADDR) / 4; // XXX: should be per hart
                 Ok(self.msip.load(Ordering::Relaxed) as u32)
             }
             MTIME_ADDR => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDR),
@@ -144,8 +148,8 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     if ip >> (InterruptType::SEIP as u8) == 0b1 {
         return Some(InterruptType::SEIP);
     }
-    if ip >> (InterruptType::USIP as u8) == 0b1 {
-        return Some(InterruptType::USIP);
+    if ip >> (InterruptType::UEIP as u8) == 0b1 {
+        return Some(InterruptType::UEIP);
     }
 
     // Local Timer
@@ -155,8 +159,8 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     if ip >> (InterruptType::STIP as u8) == 0b1 {
         return Some(InterruptType::STIP);
     }
-    if ip >> (InterruptType::UEIP as u8) == 0b1 {
-        return Some(InterruptType::UEIP);
+    if ip >> (InterruptType::UTIP as u8) == 0b1 {
+        return Some(InterruptType::UTIP);
     }
 
     // Local Software
@@ -173,23 +177,45 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     None
 }
 
-pub(crate) fn interrupt(hart: &Hart) -> Option<InterruptType> {
+pub(crate) fn interrupt(hart: &Hart) -> Option<u64> {
     let mode = PrivilegeLevel::M;
     let mstatus = hart.get_csr(csr::MSTATUS);
 
     let enabled = match mode {
-        PrivilegeLevel::M => mstatus & 0b0001 > 0,
-        PrivilegeLevel::S => mstatus & 0b0010 > 0,
-        PrivilegeLevel::U => mstatus & 0b1001 > 0,
+        PrivilegeLevel::M => mstatus & 0x8 > 0,
+        PrivilegeLevel::S => mstatus & 0x2 > 0,
+        PrivilegeLevel::U => mstatus & 0x1 > 0,
     };
 
     if !enabled {
         return None;
     }
 
-    let msip = hart.bus.read_word(0x2000000 + MSIP_HART0_ADDR).expect(".") as u64; // XXX: bad.
-    let mip = hart.get_csr(csr::MIP);
+    let mut mip = hart.get_csr(csr::MIP);
     let mie = hart.get_csr(csr::MIE);
 
-    pending_interrupt(mip | msip, mie)
+    // Include the clint interrupt status
+    let msip = hart.bus.read_word(CLINT_BASE + MSIP_HART0_ADDR).unwrap() as u64; // XXX: bad.
+    mip |= msip;
+
+    // Include the plic interrupt status
+    let eip = hart.bus.read_word(plic::PLIC_BASE + PLIC_EIP_ADDR).unwrap(); // XXX: bad.
+    if eip > 0 {
+        mip |= 1 << InterruptType::MEIP as u64;
+        mip |= 1 << InterruptType::SEIP as u64;
+    }
+
+    pending_interrupt(mip, mie).map(|interrupt| {
+        match interrupt {
+            InterruptType::MEIP => 0x800000000000000b, // Machine external interrupt
+            InterruptType::SEIP => 0x8000000000000009,
+            InterruptType::UEIP => 0x8000000000000008,
+            InterruptType::MTIP => 0x8000000000000007, // Machine timer interrupt
+            InterruptType::STIP => 0x8000000000000005,
+            InterruptType::UTIP => 0x8000000000000004,
+            InterruptType::MSIP => 0x8000000000000003, // Machine software interrupt
+            InterruptType::SSIP => 0x8000000000000001,
+            InterruptType::USIP => 0x8000000000000000,
+        }
+    })
 }

@@ -11,48 +11,50 @@ struct Queue {
     desc: usize,
     driver: usize,
     device: usize,
+    avail_idx: u16,
 }
 
-struct VirtqDesc {
+struct Descriptor {
     addr: usize,
     len: u32,
     flags: u16,
     next: u16,
+    idx: u16,
 }
 
-impl VirtqDesc {
+impl Descriptor {
     const NEXT: u16 = 1;
     const WRITE: u16 = 2;
     const INDIRECT: u16 = 4;
 }
 
-impl Display for VirtqDesc {
+impl Display for Descriptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut flags = vec![];
-        if self.flags & VirtqDesc::NEXT > 0 {
+        if self.flags & Descriptor::NEXT > 0 {
             flags.push("next");
         }
-        if self.flags & VirtqDesc::WRITE > 0 {
+        if self.flags & Descriptor::WRITE > 0 {
             flags.push("write");
         }
-        if self.flags & VirtqDesc::INDIRECT > 0 {
+        if self.flags & Descriptor::INDIRECT > 0 {
             flags.push("indirect");
         }
         write!(f, "virtq[0x{:x} {}] {:?} -> {}", self.addr, self.len, flags, self.next)
     }
 }
 
-struct VirtDescs<'a>(pub &'a Vec<VirtqDesc>);
+struct VirtDescs<'a>(pub &'a Vec<Descriptor>);
 
 impl<'a> Display for VirtDescs<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[",).expect(".");
         for desc in self.0 {
             let mut flags = vec![];
-            if desc.flags & VirtqDesc::WRITE > 0 {
+            if desc.flags & Descriptor::WRITE > 0 {
                 flags.push("write");
             }
-            if desc.flags & VirtqDesc::INDIRECT > 0 {
+            if desc.flags & Descriptor::INDIRECT > 0 {
                 flags.push("indirect");
             }
             write!(f, "virtq[0x{:x} {} {:?}], ", desc.addr, desc.len, flags).expect(".");

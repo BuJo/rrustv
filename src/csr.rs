@@ -1,4 +1,4 @@
-use log::trace;
+use log::{debug, trace};
 
 const XLEN: u64 = 32;
 
@@ -19,6 +19,8 @@ pub const MINSTRET: usize = 0xB02;
 pub const SATP: usize = 0x180;
 pub const MIP: usize = 0x344;
 pub const MIE: usize = 0x304;
+pub const MEPC: usize = 0x341;
+pub const MCAUSE: usize = 0x342;
 
 type CsrFn = for<'a> fn(&'a Csr, usize) -> u64;
 type CsrWrFn = for<'a> fn(&'a mut Csr, usize, u64);
@@ -99,7 +101,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (MHARTID, "mhartid", Csr::read_any, Csr::write_any),
     (0xF15, "mconfigptr", Csr::read_any, Csr::write_any),
     // Machine Trap Setup
-    (MSTATUS, "mstatus", Csr::read_any, Csr::write_any),
+    (MSTATUS, "mstatus", Csr::read_any, Csr::write_mstatus),
     (MISA, "misa", Csr::read_any, Csr::write_any),
     (MEDELEG, "medeleg", Csr::read_any, Csr::write_any),
     (0x303, "mideleg", Csr::read_any, Csr::write_any),
@@ -109,8 +111,8 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (0x310, "mstatush", Csr::read_any, Csr::write_any),
     // Machine Trap Handling
     (MSCRATCH, "mscratch", Csr::read_any, Csr::write_any),
-    (0x341, "mepc", Csr::read_any, Csr::write_any),
-    (0x342, "mcause", Csr::read_any, Csr::write_any),
+    (MEPC, "mepc", Csr::read_any, Csr::write_any),
+    (MCAUSE, "mcause", Csr::read_any, Csr::write_any),
     (0x343, "mtval", Csr::read_any, Csr::write_any),
     (MIP, "mip", Csr::read_any, Csr::write_any),
     (0x34A, "minst", Csr::read_any, Csr::write_any),
@@ -242,19 +244,33 @@ impl Csr {
 
     // WARL
     fn write_mtvec(&mut self, csr: usize, val: u64) {
-        let base = val >> 2;
-        let mode = val & 0b11;
+        /*
+                let base = val >> 2;
+                let mode = val & 0b11;
 
-        // legality: mode >= 2 is reserved
-        let mode = mode & 0b01;
+                // legality: mode >= 2 is reserved
+                let mode = mode & 0b11;
 
-        // legality: base must be aligned to 4 byte boundary
-        let base = (base >> 2) << 2;
+                // legality: base must be aligned to 4 byte boundary
+                let base = (base >> 2) << 2;
 
-        let mtvec = (base << 2) | mode;
-
-        trace!("setting MTVEC [{:x}]->[{:x}]", self.csrs[csr], mtvec);
+                let mtvec = (base << 2) | mode;
+        */
+        let mtvec = val;
+        debug!("setting MTVEC [{:x}]->[{:x}]({})", self.csrs[csr], mtvec, val);
 
         self.write_any(csr, mtvec)
+    }
+
+    // WPRI / WARL
+    fn write_mstatus(&mut self, csr: usize, val: u64) {
+        // preserve WPRI fields
+        let mask = 0x8000003f007fffeb;
+        let mstatus = val & mask;
+
+        // This is very noisy
+        trace!("setting MSTATUS [{:x}]->[{:x}]", self.csrs[csr], mstatus);
+
+        self.write_any(csr, mstatus)
     }
 }
