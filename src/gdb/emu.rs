@@ -121,7 +121,20 @@ impl Handler for Emulator {
                         return Ok(StopReason::Signal(SIGTRAP as u8));
                     }
 
-                    cpu_ref.tick()?;
+                    match cpu_ref.tick() {
+                        Ok(_) => continue,
+                        Err(e) => {
+                            return match e {
+                                Interrupt::MemoryFault(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                Interrupt::Unmapped(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                Interrupt::Unaligned(_) => Err(Error::from(e)),
+                                Interrupt::Halt => Err(Error::from(e)),
+                                Interrupt::Unimplemented(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                Interrupt::InstructionDecodingError => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                Interrupt::IllegalOpcode(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
+                            }
+                        }
+                    }
                 }
                 Ok(StopReason::Signal(SIGTRAP as u8))
             }

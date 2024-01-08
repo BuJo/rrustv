@@ -77,7 +77,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match hart.tick() {
             Ok(_) => {}
-            Err(err) => error!("err: {:?}", err),
+            Err(err) => {
+                error!("err: {:?}", err);
+                return Ok(());
+            }
         }
     }
 }
