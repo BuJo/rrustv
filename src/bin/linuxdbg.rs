@@ -1,20 +1,20 @@
-use std::net::TcpListener;
-use std::ops::Range;
-use std::sync::Arc;
 use std::{env, fs};
+use std::net::TcpListener;
+use std::sync::Arc;
 
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
+use log4rs::Config;
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
-use log4rs::Config;
 use object::{Object, ObjectSection};
 
+use rriscv::{clint, dt, plic};
 use rriscv::bus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
@@ -24,7 +24,6 @@ use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
-use rriscv::{clint, dt, plic};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();
@@ -72,39 +71,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    bus.map(
-        ram,
-        Range {
-            start: pc,
-            end: 0x88000000,
-        },
-    );
+    let s = ram.size();
+    bus.map(ram, pc..(pc + s));
+
+    // Add low ram
+    let ram = Ram::sized(0x10000);
+    bus.map(ram, 0x0..0x10000);
 
     let rtc = Rtc::new();
-    bus.map(rtc, 0x4000..0x4020);
+    bus.map(rtc, 0x40000..0x40020);
 
     let console = Uart8250::new();
     bus.map(console, 0x10000000..0x10000010);
-
-    // Add a rom at 0 to catch 0x00 reads
-    let rom = Rom::new(vec![]);
-    bus.map(rom, 0x0..0x1000);
 
     // virtio block device vda
     let vda = BlkDevice::new(disk_file, bus.clone());
     bus.map(vda, 0x10001000..0x10002000);
 
-    let clint = clint::Clint::new(bus.clone(), 0x4000);
+    let clint = clint::Clint::new(bus.clone(), 0x40000);
     bus.map(clint, 0x2000000..0x2010000);
 
     let plic = plic::Plic::new();
     bus.map(plic, 0xc000000..0xc600000);
 
     let device_tree = dt::load("linux");
-    let dtb_start = 0x8000;
+    let dtb_start = 0x80000;
     let dtb_end = dtb_start + device_tree.len();
     let dtb = Rom::new(device_tree);
-    bus.map(dtb, 0x8000..dtb_end);
+    bus.map(dtb, 0x80000..dtb_end);
 
     let mut hart = Hart::new(0, pc, bus.clone());
 
