@@ -7,7 +7,7 @@
 	model = "riscv-virtio,qemu";
 
 	chosen {
-		bootargs = "root=/dev/vda ro";
+		bootargs = "root=/dev/vda ro earlycon=uart8250,mmio,0x10000000,115200n8";
 		stdout-path = "/soc/serial@10000000";
 	};
 
