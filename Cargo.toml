@@ -11,7 +11,7 @@ default-run = "rriscv"
 [dependencies]
 gdbstub = "0.6.6"
 gdbstub_arch = "0.2.4"
-object = { version = "0.32.1" }
+object = { version = "0.32.2" }
 
 [profile.dev]
 opt-level = 0
