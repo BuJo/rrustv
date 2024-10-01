@@ -1,20 +1,19 @@
-use std::{env, fs};
 use std::net::TcpListener;
 use std::sync::Arc;
+use std::{env, fs};
 
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
-use log4rs::Config;
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
+use log4rs::Config;
 use object::{Object, ObjectSection};
 
-use rriscv::{clint, dt, plic};
 use rriscv::bus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
@@ -24,6 +23,7 @@ use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
+use rriscv::{clint, dt, plic};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();

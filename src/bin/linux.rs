@@ -1,10 +1,9 @@
-use std::{env, fs};
 use std::sync::Arc;
+use std::{env, fs};
 
 use log::error;
 use object::{Object, ObjectSection};
 
-use rriscv::{clint, dt, plic};
 use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
@@ -13,6 +12,7 @@ use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
+use rriscv::{clint, dt, plic};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
