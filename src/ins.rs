@@ -2,9 +2,9 @@ use log::trace;
 use std::fmt;
 use std::fmt::{Formatter, LowerHex};
 
-use crate::irq::Interrupt::{self, IllegalOpcode, InstructionDecodingError};
-
 use self::InstructionFormat::{B, I, J, R, S, U};
+use crate::hart::ExecutionFault;
+use crate::irq::Interrupt::{self, IllegalOpcode, InstructionDecodingError};
 
 #[derive(Debug)]
 pub enum InstructionFormat {
@@ -138,12 +138,12 @@ impl Instruction {
         }
     }
 
-    pub fn decode(self) -> Result<(Instruction, InstructionFormat), Interrupt> {
-        let res = match self {
+    pub fn decode(&self) -> Result<(Instruction, InstructionFormat), ExecutionFault> {
+        let res = match *self {
             Instruction::IRV32(instruction) => Instruction::decode_32(instruction),
             Instruction::CRV32(instruction) => Instruction::decode_16(instruction),
         };
-        res.map(|d| (self, d)).map_err(|_| IllegalOpcode(self))
+        res.map(|d| (*self, d)).map_err(|_| IllegalOpcode(*self))
     }
 
     fn decode_32(instruction: u32) -> Result<InstructionFormat, Interrupt> {
@@ -265,7 +265,7 @@ impl Instruction {
                 U { opcode, rd, imm }
             }
             _ => {
-                return Err(InstructionDecodingError);
+                return Err(InstructionDecodingError(Instruction::IRV32(instruction)));
             }
         };
 
@@ -400,7 +400,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(InstructionDecodingError);
+                        return Err(InstructionDecodingError(Instruction::CRV32(instruction)));
                     }
                 }
             }
@@ -596,7 +596,7 @@ impl Instruction {
                                         funct7: 0x20,
                                     },
                                     _ => {
-                                        return Err(InstructionDecodingError);
+                                        return Err(InstructionDecodingError(Instruction::CRV32(instruction)));
                                     }
                                 }
                             }
@@ -657,7 +657,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(InstructionDecodingError);
+                        return Err(InstructionDecodingError(Instruction::CRV32(instruction)));
                     }
                 }
             }
@@ -788,7 +788,7 @@ impl Instruction {
                         }
                     }
                     _ => {
-                        return Err(InstructionDecodingError);
+                        return Err(InstructionDecodingError(Instruction::CRV32(instruction)));
                     }
                 }
             }

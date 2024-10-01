@@ -124,15 +124,17 @@ impl Handler for Emulator {
                     match cpu_ref.tick() {
                         Ok(_) => continue,
                         Err(e) => {
+                            debug!("trapping error {:?}", e);
                             return match e {
-                                Interrupt::MemoryFault(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                /* Interrupt::MemoryFault(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
                                 Interrupt::Unmapped(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
                                 Interrupt::Unaligned(_) => Err(Error::from(e)),
                                 Interrupt::Halt => Err(Error::from(e)),
-                                Interrupt::Unimplemented(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                                Interrupt::InstructionDecodingError => Ok(StopReason::Signal(SIGTRAP as u8)),
+                                Interrupt::Unimplemented(_) => Ok(StopReason::Signal(SIGTRAP as u8)),*/
+                                Interrupt::InstructionDecodingError(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
                                 Interrupt::IllegalOpcode(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                            }
+                                e => Err(Error::from(e)),
+                            };
                         }
                     }
                 }
@@ -187,7 +189,7 @@ impl From<Interrupt> for gdb_remote_protocol::Error {
             Interrupt::Unaligned(_) => Error::Error(2),
             Interrupt::Halt => Error::Error(3),
             Interrupt::Unimplemented(_) => Error::Unimplemented,
-            Interrupt::InstructionDecodingError => Error::Error(4),
+            Interrupt::InstructionDecodingError(_) => Error::Error(4),
             Interrupt::IllegalOpcode(_) => Error::Error(5),
         }
     }

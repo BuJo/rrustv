@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::{env, fs};
 
 use log::error;
-use object::{Object, ObjectSection};
 
 use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
@@ -18,25 +17,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let args: Vec<String> = env::args().collect();
-    let image_file = args.get(1).expect("expect image file");
+    let image_file = args.get(1).expect("expect u-boot file");
     let disk_file = args.get(2).expect("expect disc file");
 
     let bin_data = fs::read(image_file).expect("file");
-    let elf = object::File::parse(&*bin_data).expect("parsing");
 
     let bus = Arc::new(DynBus::new());
     let ram = Ram::sized(1024 * 1024 * 128);
-    let pc = elf.entry() as usize;
-
-    for section in elf.sections() {
-        let name = section.name().expect("section name");
-        if name.contains("data") || name.contains("text") {
-            let start = section.address() as usize;
-            if let Ok(data) = section.uncompressed_data() {
-                ram.write(start - pc, data.to_vec());
-            }
-        }
-    }
+    let pc: usize = 0x80000000;
+    ram.write(0, bin_data.to_vec());
 
     let s = ram.size();
     bus.map(ram, pc..(pc + s));
@@ -74,16 +63,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     hart.set_register(treg("a1"), dtb_start as u64);
     hart.set_csr(rriscv::csr::SATP, 0);
 
-    let mut err_count = 0;
     loop {
         match hart.tick() {
             Ok(_) => {}
             Err(err) => {
-                err_count += 1;
                 error!("err: {:?}", err);
-                if err_count > 10 {
-                    return Ok(());
-                }
+                return Ok(());
             }
         }
     }

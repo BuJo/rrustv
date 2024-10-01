@@ -21,6 +21,7 @@ pub const MIP: usize = 0x344;
 pub const MIE: usize = 0x304;
 pub const MEPC: usize = 0x341;
 pub const MCAUSE: usize = 0x342;
+pub const MTVAL: usize = 0x343;
 
 type CsrFn = for<'a> fn(&'a Csr, usize) -> u64;
 type CsrWrFn = for<'a> fn(&'a mut Csr, usize, u64);
@@ -113,7 +114,7 @@ const CSR_MAP: [(usize, &str, CsrFn, CsrWrFn); 99] = [
     (MSCRATCH, "mscratch", Csr::read_any, Csr::write_any),
     (MEPC, "mepc", Csr::read_any, Csr::write_any),
     (MCAUSE, "mcause", Csr::read_any, Csr::write_any),
-    (0x343, "mtval", Csr::read_any, Csr::write_any),
+    (MTVAL, "mtval", Csr::read_any, Csr::write_any),
     (MIP, "mip", Csr::read_any, Csr::write_any),
     (0x34A, "minst", Csr::read_any, Csr::write_any),
     (0x34B, "mtval2", Csr::read_any, Csr::write_any),

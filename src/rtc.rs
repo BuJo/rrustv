@@ -1,6 +1,8 @@
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+use log::trace;
+
 use crate::device::Device;
 use crate::irq::Interrupt;
 
@@ -23,6 +25,21 @@ impl Rtc {
             mtimecmptmp: RwLock::new(u64::MAX),
         }
     }
+
+    fn get_time(&self) -> u64 {
+        (self.start.elapsed().as_nanos() & 0xFFFF_FFFF_FFFF_FFFF) as u64
+    }
+
+    fn set_timer(&self, val: u64) {
+        let mut mtimecmp = self.mtimecmp.write().unwrap();
+        *mtimecmp = Duration::from_nanos(val);
+        trace!("setting timer to: {:?}", *mtimecmp)
+    }
+
+    fn get_timer(&self) -> u64 {
+        let mtimecmp = self.mtimecmp.read().unwrap();
+        mtimecmp.as_nanos() as u64
+    }
 }
 
 impl Default for Rtc {
@@ -35,8 +52,7 @@ impl Device for Rtc {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
             MTIMECMP_ADDR => {
-                let mut v = self.mtimecmptmp.write().unwrap();
-                *v = val;
+                self.set_timer(val);
                 Ok(())
             }
             _ => Err(Interrupt::MemoryFault(addr)),
@@ -46,16 +62,15 @@ impl Device for Rtc {
     fn write_word(&self, addr: usize, val: u32) -> Result<(), Interrupt> {
         match addr {
             MTIMECMP_ADDR => {
-                let mut low = self.mtimecmptmp.write().unwrap();
-                *low = (*low & 0xFFFF_FFFF_0000_0000) | val as u64;
+                let mut tmp = self.mtimecmptmp.write().unwrap();
+                *tmp = val as u64;
                 Ok(())
             }
             MTIMECMP_ADDRH => {
-                let mut high = self.mtimecmptmp.write().unwrap();
-                *high = (*high & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
+                let tmp = self.mtimecmptmp.write().unwrap();
+                let time = (*tmp & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
 
-                let mut shared = self.mtimecmp.write().unwrap();
-                *shared = Duration::from_nanos(*high);
+                self.set_timer(time);
                 Ok(())
             }
             _ => Err(Interrupt::MemoryFault(addr)),
@@ -71,23 +86,19 @@ impl Device for Rtc {
     }
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
-        let now = self.start.elapsed();
-
         match addr {
-            MTIMECMP_ADDR => Ok(0xFFFFFFFF),
-            MTIME_ADDR => Ok(now.as_nanos() as u64),
+            MTIMECMP_ADDR => Ok(self.get_timer()),
+            MTIME_ADDR => Ok(self.get_time()),
             _ => Err(Interrupt::MemoryFault(addr)),
         }
     }
 
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
-        let now = self.start.elapsed();
-
         match addr {
-            MTIMECMP_ADDR => Ok(0xFFFFFFFF),
-            MTIMECMP_ADDRH => Ok(0xFFFFFFFF),
-            MTIME_ADDR => Ok((now.as_nanos() & 0x0FFFFFFFFu128) as u32),
-            MTIME_ADDRH => Ok(((now.as_nanos() >> 32) & 0x0FFFFFFFFu128) as u32),
+            MTIMECMP_ADDR => Ok((self.get_timer() & 0xFFFFFFFF) as u32),
+            MTIMECMP_ADDRH => Ok(((self.get_timer() >> 32) & 0xFFFFFFFF) as u32),
+            MTIME_ADDR => Ok((self.get_time() & 0xFFFFFFFF) as u32),
+            MTIME_ADDRH => Ok(((self.get_time() >> 32) & 0xFFFFFFFF) as u32),
             _ => Err(Interrupt::MemoryFault(addr)),
         }
     }

@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info, warn};
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 
@@ -139,17 +139,17 @@ fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u64, reset_reason: u64) -
 
     match reset_type {
         0x00000000 => {
-            debug!("Shutting down: {}: {}", reset_reason, reason);
+            info!("Shutting down: {}: {}", reset_reason, reason);
             hart.stop();
             Ok(0)
         }
         0x00000001 => {
-            debug!("Cold reboot: {}: {}", reset_reason, reason);
+            info!("Cold reboot: {}: {}", reset_reason, reason);
             hart.reset();
             Ok(0)
         }
         0x00000002 => {
-            debug!("Warm reboot: {}: {}", reset_reason, reason);
+            info!("Warm reboot: {}: {}", reset_reason, reason);
             hart.reset();
             Ok(0)
         }
@@ -160,6 +160,8 @@ fn sbi_system_reset(hart: &mut hart::Hart, reset_type: u64, reset_reason: u64) -
 // Legacy Extensions have a different calling convention
 fn call_0_1(hart: &mut hart::Hart) -> Result<u64, Error> {
     let func = hart.get_register(Register::EID as u8);
+
+    debug!("ecall v1 {:?}", func);
 
     let result = match func {
         0x01 => sbi_console_putchar(hart.get_register(Register::ARG0 as u8)),
@@ -174,7 +176,7 @@ fn call_0_1(hart: &mut hart::Hart) -> Result<u64, Error> {
             Ok(value)
         }
         Err(error) => {
-            debug!("error in syscall: {:?}", func);
+            warn!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }
@@ -186,6 +188,8 @@ fn call_0_2(hart: &mut hart::Hart) -> Result<u64, Error> {
         hart.get_register(Register::EID as u8),
         hart.get_register(Register::FID as u8),
     );
+
+    debug!("ecall v2 {:?}", func);
 
     let result = match func {
         (0x10, 0x0) => sbi_get_spec_version(),
@@ -210,7 +214,7 @@ fn call_0_2(hart: &mut hart::Hart) -> Result<u64, Error> {
             Ok(value)
         }
         Err(error) => {
-            debug!("error in syscall: {:?}", func);
+            warn!("error in syscall: {:?}", func);
             hart.set_register(Register::ARG0 as u8, error as u64);
             Err(error)
         }
@@ -229,7 +233,9 @@ pub fn call(hart: &mut hart::Hart) -> Result<(), Interrupt> {
     }
 }
 
-pub(crate) fn ebreak() {
+pub(crate) fn ebreak() -> Result<(), Interrupt> {
+    debug!("ignoring ebreak");
     // XXX: Ignore for now - we may decide to open a port used for GDB Remote Serial Protocol
     //      communication.
+    Err(Unimplemented("ebreak unimplemented".into()))
 }

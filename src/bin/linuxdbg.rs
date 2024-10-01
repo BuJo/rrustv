@@ -1,20 +1,10 @@
-use std::{env, fs};
 use std::net::TcpListener;
 use std::sync::Arc;
+use std::{env, fs};
 
-use log::{info, LevelFilter};
-use log4rs::append::console::ConsoleAppender;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
-use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
-use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
-use log4rs::append::rolling_file::RollingFileAppender;
-use log4rs::config::{Appender, Root};
-use log4rs::Config;
-use log4rs::encode::pattern::PatternEncoder;
-use log4rs::filter::threshold::ThresholdFilter;
+use log::info;
 use object::{Object, ObjectSection};
 
-use rriscv::{clint, dt, plic};
 use rriscv::bus::DynBus;
 use rriscv::gdb::emu::Emulator;
 use rriscv::hart::Hart;
@@ -24,31 +14,10 @@ use rriscv::rom::Rom;
 use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
+use rriscv::{clint, dt, plic};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let stdout = ConsoleAppender::builder().build();
-    let rolling = CompoundPolicy::new(
-        Box::new(SizeTrigger::new(5 * 1024 * 1024)),
-        Box::new(FixedWindowRoller::builder().build("debug.log.{}", 3).unwrap()),
-    );
-    let debug = Appender::builder()
-        .filter(Box::new(ThresholdFilter::new(LevelFilter::Debug)))
-        .build(
-            "riscv",
-            Box::new(
-                RollingFileAppender::builder()
-                    .encoder(Box::new(PatternEncoder::new("{d} {l}::{m}{n}")))
-                    .build("debug.log", Box::new(rolling))?,
-            ),
-        );
-
-    let config = Config::builder()
-        .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .appender(debug)
-        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
-        .unwrap();
-
-    let _ = log4rs::init_config(config).unwrap();
+    env_logger::init();
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
@@ -61,18 +30,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ram = Ram::new();
     let pc = elf.entry() as usize;
 
+    info!("ELF entry: 0x{:x}", pc);
+
     for section in elf.sections() {
-        let name = section.name().expect("section name");
-        if name.contains("data") || name.contains("text") {
-            let start = section.address() as usize;
-            if let Ok(data) = section.uncompressed_data() {
-                ram.write(start - pc, data.to_vec());
-            }
+        //let name = section.name().expect("section name");
+        //if name.contains("data") || name.contains("text") {
+        let start = section.address() as usize;
+        if start == 0 {
+            continue;
         }
+        if let Ok(data) = section.uncompressed_data() {
+            ram.write(start - 0x80000000, data.to_vec());
+        }
+        //}
     }
 
     let s = ram.size();
-    bus.map(ram, pc..(pc + s));
+    bus.map(ram, 0x80000000..(pc + s));
+    info!("mapped RAM: 0x{:x} (size: {})", pc, s);
 
     // Add low ram
     let ram = Ram::sized(0x10000);

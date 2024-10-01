@@ -122,6 +122,7 @@ limitations under the License.
 * [Demystifying the RISC-V Linux software stack](https://www.european-processor-initiative.eu/wp-content/uploads/2022/06/Nick-Kossifidis-@-RISC-V-Week.pdf)
 * [6.S081: Interrupts](https://pdos.csail.mit.edu/6.828/2021/slides/6s081-lec-interrupts.pdf)
 * [RISC-V Bytes: Introduction to Instruction Formats](https://danielmangum.com/posts/risc-v-bytes-intro-instruction-formats/)
+* [RISC-V System, Booting, And Interrupts](https://marz.utk.edu/my-courses/cosc562/riscv/)
 
 ### Device Trees
 

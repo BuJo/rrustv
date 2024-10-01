@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::{cmp, mem};
 
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 
 use crate::bus::DynBus;
 use crate::clint;
@@ -10,8 +10,8 @@ use crate::csr::Csr;
 use crate::device::Device;
 use crate::ins::InstructionFormat::{B, I, J, R, S, U};
 use crate::ins::{Instruction, InstructionFormat};
-use crate::irq::Interrupt;
-use crate::irq::Interrupt::{Halt, IllegalOpcode, Unimplemented};
+use crate::irq::Interrupt::{Halt, IllegalOpcode};
+use crate::irq::{Interrupt, Mcause};
 use crate::reg::{fpreg, reg};
 use crate::see;
 
@@ -25,6 +25,12 @@ pub struct Hart {
     csr: Csr,
 
     stop: bool,
+}
+
+#[derive(Debug)]
+pub struct ExecutionFault {
+    fault: Interrupt,
+    pc: usize,
 }
 
 impl Hart {
@@ -59,39 +65,20 @@ impl Hart {
         }
 
         if let Some(cause) = clint::interrupt(self) {
-            self.csr.write(csr::MEPC, self.pc as u64);
-            self.csr.write(csr::MCAUSE, cause);
-            self.csr.write(csr::MIE, 0);
-
-            let base = self.csr.read(csr::MTVEC) as usize & !0b11;
-            let mode = self.csr.read(csr::MTVEC) & 0b11;
-            let pc = match mode {
-                0b00 => {
-                    // Direct mode
-                    base
-                }
-                0b01 => {
-                    // Vectored mode
-                    (base % 128) + 4 * ((cause as usize >> 1) << 1)
-                }
-                _ => {
-                    // Reserved
-                    return Err(Unimplemented("reserved mtvec mode".into()));
-                }
-            };
-            self.pc = pc;
-            warn!(
-                "interrupt {:b}|{}: jumping to 0x{:x}",
-                cause >> 63,
-                (cause << 1) >> 1,
-                base
-            );
+            self.pc = self.interrupt(cause, self.pc);
         }
 
         let res = self
             .fetch_instruction()
-            .and_then(|instruction| instruction.decode())
-            .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins));
+            .or_else(|x| self.handle_fetch_failure(x))
+            .and_then(|ins| ins.decode())
+            .or_else(|x| self.handle_decode_failure(x))
+            .and_then(|(ins, decoded)| {
+                self.pc += ins.size();
+                Ok((ins, decoded))
+            })
+            .and_then(|(ins, decoded)| self.execute_instruction(decoded, ins))
+            .or_else(|x| self.handle_execution_failure(x));
 
         // simulate passing of time
         self.csr.write(csr::MCYCLE, self.csr.read(csr::MCYCLE) + 3);
@@ -102,6 +89,96 @@ impl Hart {
                 debug!("hart fault: {:?}", err);
                 Err(err)
             }
+        }
+    }
+
+    fn interrupt(&mut self, cause: Mcause, pc: usize) -> usize {
+        let cause = cause as u64;
+
+        self.csr.write(csr::MEPC, pc as u64);
+        self.csr.write(csr::MCAUSE, cause);
+        self.csr.write(csr::MIE, 0);
+
+        let base = self.csr.read(csr::MTVEC) as usize & !0b11;
+        let mode = self.csr.read(csr::MTVEC) & 0b11;
+        let pc = match mode {
+            0b00 => {
+                // Direct mode
+                base
+            }
+            0b01 => {
+                // Vectored mode
+                (base % 128) + 4 * ((cause as usize >> 1) << 1)
+            }
+            _ => base,
+        };
+
+        let is_interrupt = cause >> 63 == 1;
+        let code = (cause << 1) >> 1;
+
+        // timer
+        if is_interrupt && (code == 7 || code == 6 || code == 5) {
+            debug!("interrupt 1|{}: jumping to 0x{:x}", code, base);
+        } else {
+            warn!("interrupt {}|{}: jumping to 0x{:x}", is_interrupt, code, base);
+        }
+
+        pc
+    }
+
+    fn handle_fetch_failure(&mut self, err: ExecutionFault) -> Result<Instruction, ExecutionFault> {
+        match err {
+            Interrupt::MemoryFault(addr) => {
+                info!("Load/Store/AMO fault 0x{:x}", addr);
+                self.set_csr(csr::MTVAL, addr as u64);
+                self.pc = self.interrupt(Mcause::INS_ACCESS, self.pc);
+                return Err(err);
+            }
+            Interrupt::Unmapped(addr) => {
+                info!("Load/Store/AMO unmapped 0x{:x}", addr);
+                self.set_csr(csr::MTVAL, addr as u64);
+                self.pc = self.interrupt(Mcause::INS_ACCESS, self.pc);
+                return Err(err);
+            }
+            e => Err(e),
+        }
+    }
+    fn handle_decode_failure(
+        &mut self,
+        err: ExecutionFault,
+    ) -> Result<(Instruction, InstructionFormat), ExecutionFault> {
+        match err {
+            Interrupt::InstructionDecodingError(ins) => {
+                info!("Illegal instruction {:?}", ins);
+                self.set_csr(csr::MTVAL, (self.pc - ins.size()) as u64);
+                self.pc = self.interrupt(Mcause::INS_ILL, self.pc);
+                Err(err)
+            }
+            _ => Err(err),
+        }
+    }
+
+    fn handle_execution_failure(&mut self, err: ExecutionFault) -> Result<(), ExecutionFault> {
+        match err {
+            Interrupt::MemoryFault(addr) => {
+                info!("Load/Store/AMO fault 0x{:x}", addr);
+                self.set_csr(csr::MTVAL, addr as u64);
+                self.pc = self.interrupt(Mcause::LOAD_ACCESS, self.pc); // XXX: wrong pc-4
+                Err(err)
+            }
+            Interrupt::Unmapped(addr) => {
+                info!("Load/Store/AMO unmapped 0x{:x}", addr);
+                self.set_csr(csr::MTVAL, addr as u64);
+                self.pc = self.interrupt(Mcause::LOAD_ACCESS, self.pc); // XXX: wrong pc-4
+                Err(err)
+            }
+            IllegalOpcode(ins) => {
+                info!("Illegal instruction {:?}", ins);
+                self.set_csr(csr::MTVAL, self.pc as u64); // XXX: wrong pc-4
+                self.pc = self.interrupt(Mcause::INS_ILL, self.pc);
+                Err(err)
+            }
+            _ => Err(err),
         }
     }
 
@@ -132,13 +209,13 @@ impl Hart {
         self.pc
     }
 
-    fn fetch_instruction(&mut self) -> Result<Instruction, Interrupt> {
+    fn fetch_instruction(&mut self) -> Result<Instruction, ExecutionFault> {
         // Assuming little-endian, the first byte contains the opcode
         let ins = self.bus.read_word(self.pc)?;
         match ins & 0b11 {
             // 32-bit instruction
             0b11 => {
-                debug!(
+                trace!(
                     "[{}] [{:#x}] {:07b} Opcode for ins {:08x} {:032b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
@@ -146,13 +223,12 @@ impl Hart {
                     ins,
                     ins
                 );
-                self.pc += 4;
                 Ok(Instruction::IRV32(ins))
             }
             // 16-bit compressed instruction
             _ => {
                 let ins = self.bus.read_half(self.pc)?;
-                debug!(
+                trace!(
                     "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
@@ -160,7 +236,6 @@ impl Hart {
                     ins,
                     ins
                 );
-                self.pc += 2;
                 Ok(Instruction::CRV32(ins))
             }
         }
@@ -209,7 +284,7 @@ impl SignExtendable for i64 {
 }
 
 impl Hart {
-    fn execute_instruction(&mut self, instruction: InstructionFormat, ins: Instruction) -> Result<(), Interrupt> {
+    fn execute_instruction(&mut self, instruction: InstructionFormat, ins: Instruction) -> Result<(), ExecutionFault> {
         match instruction {
             // RV32I
 
@@ -1210,9 +1285,9 @@ impl Hart {
                 imm: 0x1,
                 ..
             } => {
-                see::ebreak();
-
                 self.dbgins(ins, "ebreak".to_string());
+
+                let _ = see::ebreak();
 
                 // ebreak causes synchronous exception
                 return Ok(());
@@ -1547,9 +1622,9 @@ impl Hart {
 
 #[cfg(test)]
 mod tests {
-    use crate::bus::DynBus;
     use std::sync::Arc;
 
+    use crate::bus::DynBus;
     use crate::hart::Hart;
     use crate::ins::{Instruction, InstructionFormat};
     use crate::ram::Ram;

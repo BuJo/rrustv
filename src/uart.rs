@@ -3,8 +3,11 @@ use crate::irq::Interrupt;
 use log::trace;
 use std::io;
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-pub struct Uart8250 {}
+pub struct Uart8250 {
+    ie: AtomicBool,
+}
 
 #[allow(unused)]
 impl Uart8250 {
@@ -18,7 +21,9 @@ impl Uart8250 {
     const DLM: usize = 1; // In: Divisor Latch Low
 
     pub fn new() -> Uart8250 {
-        Uart8250 {}
+        Uart8250 {
+            ie: AtomicBool::new(true),
+        }
     }
 }
 
@@ -56,8 +61,10 @@ impl Device for Uart8250 {
             Uart8250::IER => {
                 if val == 0 {
                     trace!("8250: disabling interrupts");
+                    self.ie.store(false, Ordering::Relaxed);
                 } else {
                     trace!("8250: enabling interrupts");
+                    self.ie.store(true, Ordering::Relaxed);
                 }
                 Ok(())
             }
@@ -102,9 +109,10 @@ impl Device for Uart8250 {
                 io::stdin().read_exact(&mut buffer)?;
                 Ok(buffer[0])
             }
+            Uart8250::IER => Ok(self.ie.load(Ordering::Relaxed) as u8),
             Uart8250::LSR => Ok(0x60 | have_data as u8),
             Uart8250::LCR => Ok(0b11),
-            _ => Ok(0),
+            _ => Err(Interrupt::Unimplemented(format!("8250: reading addr {}", addr))),
         }
     }
 }

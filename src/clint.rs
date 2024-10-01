@@ -5,9 +5,10 @@ use std::sync::Arc;
 use log::trace;
 
 use crate::bus::DynBus;
+use crate::csr::MINSTRET;
 use crate::device::Device;
 use crate::hart::Hart;
-use crate::irq::Interrupt;
+use crate::irq::{Interrupt, Mcause};
 use crate::{csr, plic, rtc};
 
 pub const CLINT_BASE: usize = 0x2000000;
@@ -107,6 +108,7 @@ impl Device for Clint {
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         match addr {
             MTIME_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIME_ADDR),
+            MTIMECMP_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIMECMP_ADDR),
             _ => {
                 trace!("reading double word from 0x{:x}", addr);
                 Ok(0)
@@ -177,7 +179,7 @@ fn pending_interrupt(mip: u64, mie: u64) -> Option<InterruptType> {
     None
 }
 
-pub(crate) fn interrupt(hart: &Hart) -> Option<u64> {
+pub(crate) fn interrupt(hart: &Hart) -> Option<Mcause> {
     let mode = PrivilegeLevel::M;
     let mstatus = hart.get_csr(csr::MSTATUS);
 
@@ -205,17 +207,26 @@ pub(crate) fn interrupt(hart: &Hart) -> Option<u64> {
         mip |= 1 << InterruptType::SEIP as u64;
     }
 
-    pending_interrupt(mip, mie).map(|interrupt| {
-        match interrupt {
-            InterruptType::MEIP => 0x800000000000000b, // Machine external interrupt
-            InterruptType::SEIP => 0x8000000000000009,
-            InterruptType::UEIP => 0x8000000000000008,
-            InterruptType::MTIP => 0x8000000000000007, // Machine timer interrupt
-            InterruptType::STIP => 0x8000000000000005,
-            InterruptType::UTIP => 0x8000000000000004,
-            InterruptType::MSIP => 0x8000000000000003, // Machine software interrupt
-            InterruptType::SSIP => 0x8000000000000001,
-            InterruptType::USIP => 0x8000000000000000,
+    // Poor timer, check every other instruction if timer
+    let instret = hart.get_csr(MINSTRET);
+    if instret % 100 == 0 {
+        let mtimecmp = hart.bus.read_double(CLINT_BASE + MTIMECMP_ADDR).unwrap();
+        let time = hart.bus.read_double(CLINT_BASE + MTIME_ADDR).unwrap();
+        if mtimecmp <= time {
+            trace!("timer erupted {} - {}", mtimecmp, time);
+            mip |= 1 << InterruptType::MTIP as u64;
         }
+    }
+
+    pending_interrupt(mip, mie).map(|interrupt| match interrupt {
+        InterruptType::MEIP => Mcause::MEIP,
+        InterruptType::SEIP => Mcause::SEIP,
+        InterruptType::UEIP => Mcause::UEIP,
+        InterruptType::MTIP => Mcause::MTIP,
+        InterruptType::STIP => Mcause::STIP,
+        InterruptType::UTIP => Mcause::UTIP,
+        InterruptType::MSIP => Mcause::MSIP,
+        InterruptType::SSIP => Mcause::SSIP,
+        InterruptType::USIP => Mcause::USIP,
     })
 }

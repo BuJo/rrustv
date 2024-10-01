@@ -8,6 +8,7 @@
 
 	chosen {
 		bootargs = "root=/dev/vda ro earlycon=uart8250,mmio,0x10000000,115200n8";
+		//rng-seed = <0x34f6690a 0xf83ff069 0xbeef75ff 0x2605cdf2 0x7b37efa8 0x8f1862ee 0x35fa733d 0x9666dd63>;
 		stdout-path = "/soc/serial@10000000";
 	};
 
@@ -35,7 +36,9 @@
 			reg = <0x00>;
 			status = "okay";
 			compatible = "riscv";
-			riscv,isa = "rv64im";
+			//riscv,isa = "rv64im";
+			riscv,isa-base = "rv64i";
+			riscv,isa-extensions = "i", "m", "a", "c";
 
 			interrupt-controller {
 				#interrupt-cells = <0x01>;
