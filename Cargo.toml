@@ -7,12 +7,12 @@ default-run = "rriscv"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-object = { version = "0.35.0" }
+object = { version = "0.36.4" }
 gdb-remote-protocol = { git = "https://github.com/luser/rust-gdb-remote-protocol" }
 env_logger = "0.11.3"
 log = "0.4.21"
 signal-hook = "0.3.17"
-term = "0.7.0"
+term = "1.0.0"
 log4rs = { version = "1.3.0", default-features = false, features = ["console_appender", "file_appender", "pattern_encoder"] }
 config = "0.14.0"
 
