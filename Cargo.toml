@@ -9,12 +9,12 @@ default-run = "rriscv"
 [dependencies]
 object = { version = "0.36.7" }
 gdb-remote-protocol = { git = "https://github.com/luser/rust-gdb-remote-protocol" }
-env_logger = "0.11.6"
-log = "0.4.22"
+env_logger = "0.11.8"
+log = "0.4.27"
 signal-hook = "0.3.17"
 term = "1.0.1"
 log4rs = { version = "1.3.0" }
-config = "0.15.6"
+config = "0.15.11"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 
 [profile.dev]
