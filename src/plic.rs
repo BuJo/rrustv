@@ -8,35 +8,20 @@ use crate::irq::Interrupt;
 
 pub const PLIC_BASE: usize = 0xc000000;
 
+#[derive(Default)]
 struct Context {
     claimed: bool,
     threshold: u32,
     enabled: HashMap<usize, u32>,
 }
 
-impl Default for Context {
-    fn default() -> Self {
-        Context {
-            claimed: false,
-            threshold: 0,
-            enabled: HashMap::new(),
-        }
-    }
-}
 
+#[derive(Default)]
 struct Source {
     priority: u32,
     interrupts: u32,
 }
 
-impl Default for Source {
-    fn default() -> Self {
-        Source {
-            priority: 0,
-            interrupts: 0,
-        }
-    }
-}
 
 pub struct Plic {
     sources: Mutex<HashMap<usize, Source>>,

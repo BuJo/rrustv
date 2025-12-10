@@ -493,7 +493,7 @@ impl Device for BlkDevice {
 
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let state = self.state.read().unwrap();
-        let queues = self.queues.write().unwrap();
+        let queues = self.queues.read().unwrap();
 
         match addr {
             Register::MagicValue => Ok(self.MagicValue),

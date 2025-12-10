@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{cmp, mem};
+use std::cmp;
 
 use log::{debug, trace, warn};
 
@@ -1142,7 +1142,7 @@ impl Hart {
             } => {
                 let offset = imm;
                 let addr = self.get_register(rs1).wrapping_add(offset.sext());
-                let val: f64 = unsafe { mem::transmute(self.bus.read_double(addr as usize)?) };
+                let val: f64 = f64::from_bits(self.bus.read_double(addr as usize)?);
                 self.fp_regs[rd as usize] = val;
                 self.dbgins(ins, format!("fld\t{},{},{}", fpreg(rd), reg(rs1), offset))
             }
@@ -1156,7 +1156,7 @@ impl Hart {
             } => {
                 let offset = imm;
                 let addr = self.get_register(rs1).wrapping_add(offset.sext());
-                let val: u64 = unsafe { mem::transmute(self.fp_regs[rs2 as usize]) };
+                let val: u64 = f64::to_bits(self.fp_regs[rs2 as usize]);
                 self.bus.write_double(addr as usize, val)?;
                 self.dbgins(ins, format!("fsd\t{},{}({})", fpreg(rs2), offset, reg(rs1)))
             }
