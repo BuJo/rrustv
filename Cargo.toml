@@ -7,14 +7,14 @@ default-run = "rriscv"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-object = { version = "0.36.7" }
+object = { version = "0.38.0" }
 gdb-remote-protocol = { git = "https://github.com/luser/rust-gdb-remote-protocol" }
 env_logger = "0.11.8"
-log = "0.4.27"
-signal-hook = "0.3.17"
+log = "0.4.29"
+signal-hook = "0.3.18"
 term = "1.0.1"
-log4rs = { version = "1.3.0" }
-config = "0.15.11"
+log4rs = { version = "1.4.0" }
+config = "0.15.19"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 
 [profile.dev]
