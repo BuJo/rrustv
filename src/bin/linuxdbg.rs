@@ -1,23 +1,22 @@
-use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::{env, fs};
-
 use gdbstub::common::Signal;
 use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::run_blocking::{BlockingEventLoop, Event, WaitForStopReasonError};
 use gdbstub::stub::{DisconnectReason, GdbStub, SingleThreadStopReason};
 use gdbstub::target::Target;
-use log::{LevelFilter, error, info};
-use log4rs::Config;
+use log::{error, info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
-use log4rs::append::rolling_file::RollingFileAppender;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
+use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
+use log4rs::Config;
 use object::{Object, ObjectSection};
+use std::net::{TcpListener, TcpStream};
+use std::sync::Arc;
+use std::{env, fs};
 
 use rriscv::bus::DynBus;
 use rriscv::gdb::emu::{Emulator, StopReason};
@@ -78,13 +77,15 @@ impl BlockingEventLoop for EmuEventLoop {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let stdout = ConsoleAppender::builder().build();
+    let stdout = Appender::builder()
+        .filter(Box::new(ThresholdFilter::new(LevelFilter::Info)))
+        .build("stdout", Box::new(ConsoleAppender::builder().build()));
     let rolling = CompoundPolicy::new(
         Box::new(SizeTrigger::new(5 * 1024 * 1024)),
-        Box::new(FixedWindowRoller::builder().build("debug.log.{}", 3).unwrap()),
+        Box::new(FixedWindowRoller::builder().build("debug.log.{}", 3)?),
     );
     let debug = Appender::builder()
-        .filter(Box::new(ThresholdFilter::new(LevelFilter::Debug)))
+        .filter(Box::new(ThresholdFilter::new(LevelFilter::Trace)))
         .build(
             "riscv",
             Box::new(
@@ -95,14 +96,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
     let config = Config::builder()
-        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(stdout)
         .appender(debug)
         // Silence gdbstub's "Unknown command" INFO messages
         .logger(Logger::builder().build("gdbstub", LevelFilter::Warn))
-        .build(Root::builder().appender("stdout").build(LevelFilter::Info))
-        .unwrap();
+        .build(Root::builder().appender("stdout").appender("riscv").build(LevelFilter::Info))?;
 
-    let _ = log4rs::init_config(config).unwrap();
+    let _ = log4rs::init_config(config)?;
 
     let args: Vec<String> = env::args().collect();
     let image_file = args.get(1).expect("expect image file");
@@ -161,10 +161,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     hart.set_register(treg("a1"), dtb_start as u64);
     hart.set_csr(rriscv::csr::SATP, 0);
 
-    let listener = TcpListener::bind("127.0.0.1:9001").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:9001")?;
     info!("Listening on port 9001");
 
-    let mut debugger = Emulator::new(hart);
+    let mut emulator = Emulator::new(hart);
     if let Ok((stream, _addr)) = listener.accept() {
         info!("Got connection");
         // Disable Nagle's algorithm for better responsiveness
@@ -172,7 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let gdb = GdbStub::new(stream);
 
-        match gdb.run_blocking::<EmuEventLoop>(&mut debugger) {
+        match gdb.run_blocking::<EmuEventLoop>(&mut emulator) {
             Ok(disconnect_reason) => match disconnect_reason {
                 DisconnectReason::Disconnect => info!("GDB client disconnected"),
                 DisconnectReason::TargetExited(code) => info!("Target exited with code {}", code),
