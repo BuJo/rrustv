@@ -14,7 +14,7 @@ use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
-use log4rs::config::{Appender, Root};
+use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use object::{Object, ObjectSection};
@@ -97,7 +97,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(debug)
-        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
+        // Silence gdbstub's "Unknown command" INFO messages
+        .logger(Logger::builder().build("gdbstub", LevelFilter::Warn))
+        .build(Root::builder().appender("stdout").build(LevelFilter::Info))
         .unwrap();
 
     let _ = log4rs::init_config(config).unwrap();
