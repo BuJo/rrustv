@@ -26,6 +26,9 @@ pub enum ExecMode {
     RangeStep { start: u64, end: u64 },
 }
 
+/// Number of instructions to execute per batch before checking for GDB input
+const INSTRUCTIONS_PER_BATCH: usize = 10000;
+
 /// Result of running the emulator
 #[derive(Debug, Clone, Copy)]
 pub enum StopReason {
@@ -33,6 +36,8 @@ pub enum StopReason {
     Signal(Signal),
     Breakpoint,
     DoneStep,
+    /// Still running, returned periodically to allow checking for GDB interrupts
+    Running,
 }
 
 pub struct Emulator {
@@ -70,12 +75,7 @@ impl Emulator {
     }
 
     fn run_continue(&mut self) -> StopReason {
-        // Execute one instruction first
-        if let Err(e) = self.hart.tick() {
-            return self.handle_interrupt(e);
-        }
-
-        loop {
+        for _ in 0..INSTRUCTIONS_PER_BATCH {
             if self.breakpoints.contains(&(self.hart.get_pc() as u64)) {
                 return StopReason::Breakpoint;
             }
@@ -90,6 +90,9 @@ impl Emulator {
                 Err(e) => return self.handle_interrupt(e),
             }
         }
+        // Batch complete, return to check for GDB input
+        self.exec_mode = Some(ExecMode::Continue);
+        StopReason::Running
     }
 
     fn run_step(&mut self) -> StopReason {
@@ -100,12 +103,7 @@ impl Emulator {
     }
 
     fn run_range_step(&mut self, start: u64, end: u64) -> StopReason {
-        // Execute one instruction first
-        if let Err(e) = self.hart.tick() {
-            return self.handle_interrupt(e);
-        }
-
-        loop {
+        for _ in 0..INSTRUCTIONS_PER_BATCH {
             let pc = self.hart.get_pc() as u64;
 
             // Stop if PC is outside the range
@@ -127,6 +125,9 @@ impl Emulator {
                 Err(e) => return self.handle_interrupt(e),
             }
         }
+        // Batch complete, return to check for GDB input
+        self.exec_mode = Some(ExecMode::RangeStep { start, end });
+        StopReason::Running
     }
 
     fn handle_interrupt(&self, interrupt: Interrupt) -> StopReason {

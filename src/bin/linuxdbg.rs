@@ -45,27 +45,30 @@ impl BlockingEventLoop for EmuEventLoop {
         Event<Self::StopReason>,
         WaitForStopReasonError<<Self::Target as Target>::Error, <Self::Connection as Connection>::Error>,
     > {
-        // Check for incoming GDB data (interrupt)
-        match conn.peek() {
-            Ok(Some(byte)) => {
-                // GDB sent something (likely Ctrl+C), signal incoming data
-                return Ok(Event::IncomingData(byte));
+        loop {
+            // Check for incoming GDB data (interrupt)
+            match conn.peek() {
+                Ok(Some(byte)) => {
+                    // GDB sent something (likely Ctrl+C), signal incoming data
+                    return Ok(Event::IncomingData(byte));
+                }
+                Ok(None) => {}
+                Err(e) => return Err(WaitForStopReasonError::Connection(e)),
             }
-            Ok(None) => {}
-            Err(e) => return Err(WaitForStopReasonError::Connection(e)),
+
+            // Run the emulator for a batch of instructions
+            let stop_reason = target.run();
+
+            let gdb_stop_reason = match stop_reason {
+                StopReason::Halted => SingleThreadStopReason::Terminated(Signal::SIGTERM),
+                StopReason::Signal(sig) => SingleThreadStopReason::Signal(sig),
+                StopReason::Breakpoint => SingleThreadStopReason::SwBreak(()),
+                StopReason::DoneStep => SingleThreadStopReason::DoneStep,
+                StopReason::Running => continue, // Keep running, check for GDB input
+            };
+
+            return Ok(Event::TargetStopped(gdb_stop_reason));
         }
-
-        // Run the emulator
-        let stop_reason = target.run();
-
-        let gdb_stop_reason = match stop_reason {
-            StopReason::Halted => SingleThreadStopReason::Terminated(Signal::SIGTERM),
-            StopReason::Signal(sig) => SingleThreadStopReason::Signal(sig),
-            StopReason::Breakpoint => SingleThreadStopReason::SwBreak(()),
-            StopReason::DoneStep => SingleThreadStopReason::DoneStep,
-        };
-
-        Ok(Event::TargetStopped(gdb_stop_reason))
     }
 
     fn on_interrupt(_target: &mut Self::Target) -> Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
