@@ -1,194 +1,320 @@
-use std::borrow::Cow;
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use gdb_remote_protocol::Signal::{SIGSTOP, SIGTRAP};
-use gdb_remote_protocol::{
-    Breakpoint, Error, Handler, MemoryRegion, ProcessType, StopReason, ThreadId, VCont, VContFeature,
+use gdbstub::common::Signal;
+use gdbstub::target::ext::base::single_register_access::{SingleRegisterAccess, SingleRegisterAccessOps};
+use gdbstub::target::ext::base::singlethread::{
+    SingleThreadBase, SingleThreadResume, SingleThreadResumeOps, SingleThreadSingleStep, SingleThreadSingleStepOps,
 };
+use gdbstub::target::ext::breakpoints::{
+    Breakpoints, BreakpointsOps, HwBreakpoint, HwBreakpointOps, SwBreakpoint, SwBreakpointOps,
+};
+use gdbstub::target::{Target, TargetError, TargetResult};
+use gdbstub_arch::riscv::Riscv64;
+use gdbstub_arch::riscv::reg::id::RiscvRegId;
 use log::debug;
 
 use crate::device::Device;
 use crate::hart::Hart;
 use crate::irq::Interrupt;
 
+/// Stop reason returned after execution completes
+#[derive(Debug, Clone, Copy)]
+pub enum ExecMode {
+    Continue,
+    Step,
+    RangeStep { start: u64, end: u64 },
+}
+
+/// Result of running the emulator
+#[derive(Debug, Clone, Copy)]
+pub enum StopReason {
+    Halted,
+    Signal(Signal),
+    Breakpoint,
+    DoneStep,
+}
+
 pub struct Emulator {
-    hart: RefCell<Hart>,
-    breakpoints: RefCell<Vec<usize>>,
+    pub hart: Hart,
+    breakpoints: Vec<u64>,
     trap: Arc<AtomicBool>,
+    exec_mode: Option<ExecMode>,
 }
 
 impl Emulator {
     pub fn new(hart: Hart) -> Emulator {
+        let trap = Arc::new(AtomicBool::new(false));
+        signal_hook::flag::register(signal_hook::consts::SIGTRAP, Arc::clone(&trap)).unwrap();
+
         Emulator {
-            hart: hart.into(),
-            breakpoints: RefCell::new(vec![]),
-            trap: Arc::new(AtomicBool::new(false)),
+            hart,
+            breakpoints: Vec::new(),
+            trap,
+            exec_mode: None,
+        }
+    }
+
+    pub fn set_exec_mode(&mut self, mode: ExecMode) {
+        self.exec_mode = Some(mode);
+    }
+
+    /// Execute until breakpoint, trap signal, or error
+    pub fn run(&mut self) -> StopReason {
+        match self.exec_mode.take() {
+            Some(ExecMode::Continue) => self.run_continue(),
+            Some(ExecMode::Step) => self.run_step(),
+            Some(ExecMode::RangeStep { start, end }) => self.run_range_step(start, end),
+            None => StopReason::Halted,
+        }
+    }
+
+    fn run_continue(&mut self) -> StopReason {
+        // Execute one instruction first
+        if let Err(e) = self.hart.tick() {
+            return self.handle_interrupt(e);
+        }
+
+        loop {
+            if self.breakpoints.contains(&(self.hart.get_pc() as u64)) {
+                return StopReason::Breakpoint;
+            }
+
+            if self.trap.load(Ordering::Relaxed) {
+                self.trap.store(false, Ordering::Relaxed);
+                return StopReason::Signal(Signal::SIGTRAP);
+            }
+
+            match self.hart.tick() {
+                Ok(_) => continue,
+                Err(e) => return self.handle_interrupt(e),
+            }
+        }
+    }
+
+    fn run_step(&mut self) -> StopReason {
+        match self.hart.tick() {
+            Ok(_) => StopReason::DoneStep,
+            Err(e) => self.handle_interrupt(e),
+        }
+    }
+
+    fn run_range_step(&mut self, start: u64, end: u64) -> StopReason {
+        // Execute one instruction first
+        if let Err(e) = self.hart.tick() {
+            return self.handle_interrupt(e);
+        }
+
+        loop {
+            let pc = self.hart.get_pc() as u64;
+
+            // Stop if PC is outside the range
+            if pc < start || pc >= end {
+                return StopReason::DoneStep;
+            }
+
+            if self.breakpoints.contains(&pc) {
+                return StopReason::Breakpoint;
+            }
+
+            if self.trap.load(Ordering::Relaxed) {
+                self.trap.store(false, Ordering::Relaxed);
+                return StopReason::Signal(Signal::SIGTRAP);
+            }
+
+            match self.hart.tick() {
+                Ok(_) => continue,
+                Err(e) => return self.handle_interrupt(e),
+            }
+        }
+    }
+
+    fn handle_interrupt(&self, interrupt: Interrupt) -> StopReason {
+        match interrupt {
+            Interrupt::Halt => StopReason::Halted,
+            Interrupt::MemoryFault(_)
+            | Interrupt::Unmapped(_)
+            | Interrupt::Unimplemented(_)
+            | Interrupt::InstructionDecodingError
+            | Interrupt::IllegalOpcode(_) => StopReason::Signal(Signal::SIGTRAP),
+            Interrupt::Unaligned(_) => StopReason::Signal(Signal::SIGBUS),
         }
     }
 }
 
-impl Handler for Emulator {
-    fn attached(&self, _pid: Option<u64>) -> Result<ProcessType, Error> {
-        debug!("process attached");
-
-        signal_hook::flag::register(signal_hook::consts::SIGTRAP, Arc::clone(&self.trap)).unwrap();
-
-        Ok(ProcessType::Attached)
-    }
-
-    fn detach(&self, _pid: Option<u64>) -> Result<(), Error> {
-        debug!("process detached");
-        Ok(())
-    }
-
-    fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
-        let mut result: Vec<u8> = vec![];
-        for i in 0..region.length {
-            result.push(self.hart.borrow().bus.read_byte((region.address + i) as usize)?);
-        }
-        Ok(result)
-    }
-
-    fn read_general_registers(&self) -> Result<Vec<u8>, Error> {
-        debug!("reading registers");
-        let mut result = Vec::new();
-        for i in 0..32 {
-            let reg = self.hart.borrow().get_register(i);
-            result.extend_from_slice(&reg.to_le_bytes());
-        }
-        let reg = self.hart.borrow().get_pc();
-        result.extend_from_slice(&reg.to_le_bytes());
-        Ok(result)
-    }
-
-    fn halt_reason(&self) -> Result<StopReason, Error> {
-        debug!("halted");
-        Ok(StopReason::Signal(SIGTRAP as u8))
-    }
-
-    fn set_address_randomization(&self, _enable: bool) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        let addr = breakpoint.addr as usize;
-        if !self.breakpoints.borrow_mut().contains(&addr) {
-            self.breakpoints.borrow_mut().push(addr);
-        }
-        Ok(())
-    }
-
-    fn insert_hardware_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        self.insert_software_breakpoint(breakpoint)
-    }
-
-    fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        self.breakpoints
-            .borrow_mut()
-            .retain(|addr| *addr != (breakpoint.addr as usize));
-        Ok(())
-    }
-
-    fn remove_hardware_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
-        self.remove_software_breakpoint(breakpoint)
-    }
-
-    fn query_supported_vcont(&self) -> Result<Cow<'static, [VContFeature]>, Error> {
-        Ok(Cow::from(
-            &[
-                VContFeature::Continue,
-                VContFeature::ContinueWithSignal,
-                VContFeature::Step,
-                VContFeature::StepWithSignal,
-                VContFeature::Stop,
-                VContFeature::RangeStep,
-            ][..],
-        ))
-    }
-
-    fn vcont(&self, request: Vec<(VCont, Option<ThreadId>)>) -> Result<StopReason, Error> {
-        debug!("continuing");
-        let req = request.first().unwrap();
-        match &req.0 {
-            VCont::Continue => {
-                let mut cpu_ref = self.hart.borrow_mut();
-                cpu_ref.tick()?;
-                while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
-                    if self.trap.load(Ordering::Relaxed) {
-                        self.trap.store(false, Ordering::Relaxed);
-                        return Ok(StopReason::Signal(SIGTRAP as u8));
-                    }
-
-                    match cpu_ref.tick() {
-                        Ok(_) => continue,
-                        Err(e) => {
-                            return match e {
-                                Interrupt::MemoryFault(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                                Interrupt::Unmapped(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                                Interrupt::Unaligned(_) => Err(Error::from(e)),
-                                Interrupt::Halt => Err(Error::from(e)),
-                                Interrupt::Unimplemented(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                                Interrupt::InstructionDecodingError => Ok(StopReason::Signal(SIGTRAP as u8)),
-                                Interrupt::IllegalOpcode(_) => Ok(StopReason::Signal(SIGTRAP as u8)),
-                            }
-                        }
-                    }
-                }
-                Ok(StopReason::Signal(SIGTRAP as u8))
-            }
-            VCont::ContinueWithSignal(sig) => {
-                let mut cpu_ref = self.hart.borrow_mut();
-                cpu_ref.tick()?;
-                while !self.breakpoints.borrow().contains(&cpu_ref.get_pc()) {
-                    if self.trap.load(Ordering::Relaxed) {
-                        self.trap.store(false, Ordering::Relaxed);
-                        return Ok(StopReason::Signal(SIGTRAP as u8));
-                    }
-
-                    cpu_ref.tick()?;
-                }
-                Ok(StopReason::Signal(*sig))
-            }
-            VCont::RangeStep(range) => {
-                let mut cpu_ref = self.hart.borrow_mut();
-                cpu_ref.tick()?;
-                while !self.breakpoints.borrow().contains(&cpu_ref.get_pc())
-                    && range.contains(&(cpu_ref.get_pc() as u64))
-                {
-                    if self.trap.load(Ordering::Relaxed) {
-                        self.trap.store(false, Ordering::Relaxed);
-                        return Ok(StopReason::Signal(SIGTRAP as u8));
-                    }
-
-                    cpu_ref.tick()?;
-                }
-                Ok(StopReason::Signal(SIGTRAP as u8))
-            }
-            VCont::Step => {
-                self.hart.borrow_mut().tick()?;
-                Ok(StopReason::Signal(SIGTRAP as u8))
-            }
-            VCont::StepWithSignal(sig) => {
-                self.hart.borrow_mut().tick()?;
-                Ok(StopReason::Signal(*sig))
-            }
-            VCont::Stop => Ok(StopReason::Signal(SIGSTOP as u8)),
-        }
-    }
+/// Custom error type for the emulator
+#[derive(Debug)]
+pub enum EmulatorError {
+    MemoryFault(usize),
+    Unmapped(usize),
+    Unaligned(usize),
+    Halt,
+    Unimplemented(String),
+    InstructionDecodingError,
+    IllegalOpcode,
 }
 
-impl From<Interrupt> for gdb_remote_protocol::Error {
+impl From<Interrupt> for EmulatorError {
     fn from(value: Interrupt) -> Self {
         match value {
-            Interrupt::MemoryFault(_) => Error::Error(0),
-            Interrupt::Unmapped(_) => Error::Error(1),
-            Interrupt::Unaligned(_) => Error::Error(2),
-            Interrupt::Halt => Error::Error(3),
-            Interrupt::Unimplemented(_) => Error::Unimplemented,
-            Interrupt::InstructionDecodingError => Error::Error(4),
-            Interrupt::IllegalOpcode(_) => Error::Error(5),
+            Interrupt::MemoryFault(addr) => EmulatorError::MemoryFault(addr),
+            Interrupt::Unmapped(addr) => EmulatorError::Unmapped(addr),
+            Interrupt::Unaligned(addr) => EmulatorError::Unaligned(addr),
+            Interrupt::Halt => EmulatorError::Halt,
+            Interrupt::Unimplemented(msg) => EmulatorError::Unimplemented(msg),
+            Interrupt::InstructionDecodingError => EmulatorError::InstructionDecodingError,
+            Interrupt::IllegalOpcode(_) => EmulatorError::IllegalOpcode,
         }
+    }
+}
+
+impl Target for Emulator {
+    type Arch = Riscv64;
+    type Error = EmulatorError;
+
+    fn base_ops(&mut self) -> gdbstub::target::ext::base::BaseOps<'_, Self::Arch, Self::Error> {
+        gdbstub::target::ext::base::BaseOps::SingleThread(self)
+    }
+
+    fn support_breakpoints(&mut self) -> Option<BreakpointsOps<'_, Self>> {
+        Some(self)
+    }
+}
+
+impl SingleThreadBase for Emulator {
+    fn read_registers(&mut self, regs: &mut gdbstub_arch::riscv::reg::RiscvCoreRegs<u64>) -> TargetResult<(), Self> {
+        debug!("reading registers");
+        for i in 0..32 {
+            regs.x[i] = self.hart.get_register(i as u8);
+        }
+        regs.pc = self.hart.get_pc() as u64;
+        Ok(())
+    }
+
+    fn write_registers(&mut self, regs: &gdbstub_arch::riscv::reg::RiscvCoreRegs<u64>) -> TargetResult<(), Self> {
+        debug!("writing registers");
+        for i in 0..32 {
+            self.hart.set_register(i as u8, regs.x[i]);
+        }
+        self.hart.set_pc(regs.pc as usize);
+        Ok(())
+    }
+
+    fn read_addrs(&mut self, start_addr: u64, data: &mut [u8]) -> TargetResult<usize, Self> {
+        for (i, byte) in data.iter_mut().enumerate() {
+            match self.hart.bus.read_byte((start_addr as usize) + i) {
+                Ok(b) => *byte = b,
+                Err(_) => return Ok(i), // Return number of bytes successfully read
+            }
+        }
+        Ok(data.len())
+    }
+
+    fn write_addrs(&mut self, start_addr: u64, data: &[u8]) -> TargetResult<(), Self> {
+        for (i, byte) in data.iter().enumerate() {
+            if let Err(e) = self.hart.bus.write_byte((start_addr as usize) + i, *byte) {
+                return Err(TargetError::Fatal(e.into()));
+            }
+        }
+        Ok(())
+    }
+
+    fn support_resume(&mut self) -> Option<SingleThreadResumeOps<'_, Self>> {
+        Some(self)
+    }
+
+    fn support_single_register_access(&mut self) -> Option<SingleRegisterAccessOps<'_, (), Self>> {
+        Some(self)
+    }
+}
+
+impl SingleRegisterAccess<()> for Emulator {
+    fn read_register(&mut self, _tid: (), reg_id: RiscvRegId<u64>, buf: &mut [u8]) -> TargetResult<usize, Self> {
+        let value = match reg_id {
+            RiscvRegId::Gpr(n) => self.hart.get_register(n),
+            RiscvRegId::Pc => self.hart.get_pc() as u64,
+            _ => return Ok(0), // Unsupported register
+        };
+        let bytes = value.to_le_bytes();
+        let len = buf.len().min(bytes.len());
+        buf[..len].copy_from_slice(&bytes[..len]);
+        Ok(len)
+    }
+
+    fn write_register(&mut self, _tid: (), reg_id: RiscvRegId<u64>, val: &[u8]) -> TargetResult<(), Self> {
+        let mut bytes = [0u8; 8];
+        let len = val.len().min(8);
+        bytes[..len].copy_from_slice(&val[..len]);
+        let value = u64::from_le_bytes(bytes);
+
+        match reg_id {
+            RiscvRegId::Gpr(n) => self.hart.set_register(n, value),
+            RiscvRegId::Pc => self.hart.set_pc(value as usize),
+            _ => return Ok(()), // Ignore unsupported registers
+        }
+        Ok(())
+    }
+}
+
+impl SingleThreadResume for Emulator {
+    fn resume(&mut self, signal: Option<Signal>) -> Result<(), Self::Error> {
+        debug!("resuming with signal: {:?}", signal);
+        self.exec_mode = Some(ExecMode::Continue);
+        Ok(())
+    }
+
+    fn support_single_step(&mut self) -> Option<SingleThreadSingleStepOps<'_, Self>> {
+        Some(self)
+    }
+}
+
+impl SingleThreadSingleStep for Emulator {
+    fn step(&mut self, signal: Option<Signal>) -> Result<(), Self::Error> {
+        debug!("stepping with signal: {:?}", signal);
+        self.exec_mode = Some(ExecMode::Step);
+        Ok(())
+    }
+}
+
+impl Breakpoints for Emulator {
+    fn support_sw_breakpoint(&mut self) -> Option<SwBreakpointOps<'_, Self>> {
+        Some(self)
+    }
+
+    fn support_hw_breakpoint(&mut self) -> Option<HwBreakpointOps<'_, Self>> {
+        Some(self)
+    }
+}
+
+impl SwBreakpoint for Emulator {
+    fn add_sw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
+        debug!("adding software breakpoint at {:#x}", addr);
+        if !self.breakpoints.contains(&addr) {
+            self.breakpoints.push(addr);
+        }
+        Ok(true)
+    }
+
+    fn remove_sw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
+        debug!("removing software breakpoint at {:#x}", addr);
+        self.breakpoints.retain(|&a| a != addr);
+        Ok(true)
+    }
+}
+
+impl HwBreakpoint for Emulator {
+    fn add_hw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
+        debug!("adding hardware breakpoint at {:#x}", addr);
+        // Treat hardware breakpoints same as software for this emulator
+        if !self.breakpoints.contains(&addr) {
+            self.breakpoints.push(addr);
+        }
+        Ok(true)
+    }
+
+    fn remove_hw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
+        debug!("removing hardware breakpoint at {:#x}", addr);
+        self.breakpoints.retain(|&a| a != addr);
+        Ok(true)
     }
 }

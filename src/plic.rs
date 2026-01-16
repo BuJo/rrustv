@@ -15,13 +15,11 @@ struct Context {
     enabled: HashMap<usize, u32>,
 }
 
-
 #[derive(Default)]
 struct Source {
     priority: u32,
     interrupts: u32,
 }
-
 
 pub struct Plic {
     sources: Mutex<HashMap<usize, Source>>,
@@ -68,8 +66,7 @@ impl Plic {
 
         trace!(
             "source {}: reading priority threshold for context: {}",
-            source,
-            src.priority
+            source, src.priority
         );
 
         src.priority
@@ -92,9 +89,7 @@ impl Plic {
     fn set_source_enabled(&self, context: usize, bit_offset: usize, source_bits: u32) {
         trace!(
             "context {}: enabling sources: {:032b}[{}]",
-            context,
-            source_bits,
-            bit_offset
+            context, source_bits, bit_offset
         );
         let x = bit_offset / 4 / 4;
         let mut contexts = self.contexts.lock().unwrap();
@@ -111,9 +106,7 @@ impl Plic {
 
         trace!(
             "context {}: sources enabled enabled: {:032b}[{}]",
-            context,
-            enabled,
-            bit_offset
+            context, enabled, bit_offset
         );
 
         enabled

@@ -1,21 +1,26 @@
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::{env, fs};
 
-use log::{info, LevelFilter};
+use gdbstub::common::Signal;
+use gdbstub::conn::{Connection, ConnectionExt};
+use gdbstub::stub::run_blocking::{BlockingEventLoop, Event, WaitForStopReasonError};
+use gdbstub::stub::{DisconnectReason, GdbStub, SingleThreadStopReason};
+use gdbstub::target::Target;
+use log::{LevelFilter, error, info};
+use log4rs::Config;
 use log4rs::append::console::ConsoleAppender;
+use log4rs::append::rolling_file::RollingFileAppender;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
-use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
-use log4rs::Config;
 use object::{Object, ObjectSection};
 
 use rriscv::bus::DynBus;
-use rriscv::gdb::emu::Emulator;
+use rriscv::gdb::emu::{Emulator, StopReason};
 use rriscv::hart::Hart;
 use rriscv::ram::Ram;
 use rriscv::reg::treg;
@@ -24,6 +29,50 @@ use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
 use rriscv::{clint, dt, plic};
+
+/// Event loop implementation for blocking GDB stub
+struct EmuEventLoop;
+
+impl BlockingEventLoop for EmuEventLoop {
+    type Target = Emulator;
+    type Connection = TcpStream;
+    type StopReason = SingleThreadStopReason<u64>;
+
+    fn wait_for_stop_reason(
+        target: &mut Self::Target,
+        conn: &mut Self::Connection,
+    ) -> Result<
+        Event<Self::StopReason>,
+        WaitForStopReasonError<<Self::Target as Target>::Error, <Self::Connection as Connection>::Error>,
+    > {
+        // Check for incoming GDB data (interrupt)
+        match conn.peek() {
+            Ok(Some(byte)) => {
+                // GDB sent something (likely Ctrl+C), signal incoming data
+                return Ok(Event::IncomingData(byte));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(WaitForStopReasonError::Connection(e)),
+        }
+
+        // Run the emulator
+        let stop_reason = target.run();
+
+        let gdb_stop_reason = match stop_reason {
+            StopReason::Halted => SingleThreadStopReason::Terminated(Signal::SIGTERM),
+            StopReason::Signal(sig) => SingleThreadStopReason::Signal(sig),
+            StopReason::Breakpoint => SingleThreadStopReason::SwBreak(()),
+            StopReason::DoneStep => SingleThreadStopReason::DoneStep,
+        };
+
+        Ok(Event::TargetStopped(gdb_stop_reason))
+    }
+
+    fn on_interrupt(_target: &mut Self::Target) -> Result<Option<Self::StopReason>, <Self::Target as Target>::Error> {
+        // When GDB sends Ctrl+C, return a signal stop
+        Ok(Some(SingleThreadStopReason::Signal(Signal::SIGINT)))
+    }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = ConsoleAppender::builder().build();
@@ -110,10 +159,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:9001").unwrap();
     info!("Listening on port 9001");
 
-    let debugger = Emulator::new(hart);
+    let mut debugger = Emulator::new(hart);
     if let Ok((stream, _addr)) = listener.accept() {
         info!("Got connection");
-        gdb_remote_protocol::process_packets_from(stream.try_clone().unwrap(), stream, debugger);
+        // Disable Nagle's algorithm for better responsiveness
+        stream.set_nodelay(true)?;
+
+        let gdb = GdbStub::new(stream);
+
+        match gdb.run_blocking::<EmuEventLoop>(&mut debugger) {
+            Ok(disconnect_reason) => match disconnect_reason {
+                DisconnectReason::Disconnect => info!("GDB client disconnected"),
+                DisconnectReason::TargetExited(code) => info!("Target exited with code {}", code),
+                DisconnectReason::TargetTerminated(sig) => {
+                    info!("Target terminated with signal {:?}", sig)
+                }
+                DisconnectReason::Kill => info!("GDB sent kill command"),
+            },
+            Err(e) => error!("GDB error: {:?}", e),
+        }
     }
     info!("Connection closed");
 

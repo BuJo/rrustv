@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::cmp;
+use std::sync::Arc;
 
 use log::{debug, trace, warn};
 
@@ -130,6 +130,10 @@ impl Hart {
 
     pub fn get_pc(&self) -> usize {
         self.pc
+    }
+
+    pub fn set_pc(&mut self, pc: usize) {
+        self.pc = pc;
     }
 
     fn fetch_instruction(&mut self) -> Result<Instruction, Interrupt> {

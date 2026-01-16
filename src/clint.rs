@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use log::trace;
 

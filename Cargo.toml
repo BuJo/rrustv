@@ -8,7 +8,8 @@ default-run = "rriscv"
 
 [dependencies]
 object = { version = "0.38.0" }
-gdb-remote-protocol = { git = "https://github.com/luser/rust-gdb-remote-protocol" }
+gdbstub = "0.7"
+gdbstub_arch = "0.3"
 env_logger = "0.11.8"
 log = "0.4.29"
 signal-hook = "0.3.18"
