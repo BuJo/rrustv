@@ -35,8 +35,8 @@ impl Device for Rtc {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
             MTIMECMP_ADDR => {
-                let mut v = self.mtimecmptmp.write().unwrap();
-                *v = val;
+                let mut v = self.mtimecmp.write().unwrap();
+                *v = Duration::from_nanos(val);
                 Ok(())
             }
             _ => Err(Interrupt::MemoryFault(addr)),
@@ -51,11 +51,11 @@ impl Device for Rtc {
                 Ok(())
             }
             MTIMECMP_ADDRH => {
-                let mut high = self.mtimecmptmp.write().unwrap();
-                *high = (*high & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
+                let high = self.mtimecmptmp.write().unwrap();
+                let val = (*high & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
 
-                let mut shared = self.mtimecmp.write().unwrap();
-                *shared = Duration::from_nanos(*high);
+                let mut mtimecmp = self.mtimecmp.write().unwrap();
+                *mtimecmp = Duration::from_nanos(val);
                 Ok(())
             }
             _ => Err(Interrupt::MemoryFault(addr)),
@@ -72,9 +72,10 @@ impl Device for Rtc {
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         let now = self.start.elapsed();
+        let cmp = self.mtimecmp.read().unwrap();
 
         match addr {
-            MTIMECMP_ADDR => Ok(0xFFFFFFFF),
+            MTIMECMP_ADDR => Ok(cmp.as_nanos() as u64),
             MTIME_ADDR => Ok(now.as_nanos() as u64),
             _ => Err(Interrupt::MemoryFault(addr)),
         }
@@ -82,10 +83,11 @@ impl Device for Rtc {
 
     fn read_word(&self, addr: usize) -> Result<u32, Interrupt> {
         let now = self.start.elapsed();
+        let cmp = self.mtimecmp.read().unwrap();
 
         match addr {
-            MTIMECMP_ADDR => Ok(0xFFFFFFFF),
-            MTIMECMP_ADDRH => Ok(0xFFFFFFFF),
+            MTIMECMP_ADDR => Ok(cmp.as_nanos() as u32),
+            MTIMECMP_ADDRH => Ok((cmp.as_nanos() >> 32) as u32),
             MTIME_ADDR => Ok((now.as_nanos() & 0x0FFFFFFFFu128) as u32),
             MTIME_ADDRH => Ok(((now.as_nanos() >> 32) & 0x0FFFFFFFFu128) as u32),
             _ => Err(Interrupt::MemoryFault(addr)),
