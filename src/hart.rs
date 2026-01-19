@@ -1,7 +1,7 @@
 use std::cmp;
 use std::sync::Arc;
 
-use log::{debug, trace, warn};
+use log::{debug, trace};
 
 use crate::bus::DynBus;
 use crate::clint;
@@ -80,7 +80,7 @@ impl Hart {
                 }
             };
             self.pc = pc;
-            warn!(
+            trace!(
                 "interrupt {:b}|{}: jumping to 0x{:x}",
                 cause >> 63,
                 (cause << 1) >> 1,
