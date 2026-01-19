@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::{env, fs};
 
-use log::error;
-use object::{Object, ObjectSection};
+use log::{error, info};
+use object::{Object, ObjectSection, SectionFlags, SectionKind};
 
 use rriscv::bus::DynBus;
 use rriscv::hart::Hart;
@@ -30,10 +30,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for section in elf.sections() {
         let name = section.name().expect("section name");
-        if name.contains("data") || name.contains("text") {
-            let start = section.address() as usize;
-            if let Ok(data) = section.uncompressed_data() {
-                ram.write(start - pc, data.to_vec());
+        let start = section.address() as usize;
+        let size = section.size() as usize;
+        if let SectionFlags::Elf { sh_flags: flags } = section.flags()
+            && (flags & object::elf::SHF_ALLOC as u64) > 0
+        {
+            match section.kind() {
+                SectionKind::Text
+                | SectionKind::Data
+                | SectionKind::ReadOnlyData
+                | SectionKind::ReadOnlyString
+                | SectionKind::Tls => {
+                    let data = section.uncompressed_data()?;
+                    info!(
+                        "Loading section '{}': addr=0x{:x}, size=0x{:x}, ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        data.len(),
+                        start - pc,
+                        flags
+                    );
+                    ram.write(start - pc, data.to_vec());
+                }
+                SectionKind::UninitializedData | SectionKind::UninitializedTls => {
+                    info!(
+                        "Zero-Initializing section '{}': addr=0x{:x}, size=0x{:x} ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        size,
+                        start - pc,
+                        flags
+                    );
+                }
+                _ => {}
             }
         }
     }

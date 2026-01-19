@@ -3,21 +3,17 @@ use gdbstub::conn::{Connection, ConnectionExt};
 use gdbstub::stub::run_blocking::{BlockingEventLoop, Event, WaitForStopReasonError};
 use gdbstub::stub::{DisconnectReason, GdbStub, SingleThreadStopReason};
 use gdbstub::target::Target;
-use log::{error, info, LevelFilter};
+use log::{LevelFilter, error, info};
+use log4rs::Config;
 use log4rs::append::console::ConsoleAppender;
+use log4rs::append::rolling_file::RollingFileAppender;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
 use log4rs::append::rolling_file::policy::compound::roll::fixed_window::FixedWindowRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
-use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
-use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
-use log4rs::Config;
-use object::{Object, ObjectSection};
-use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::{env, fs};
-
+use object::{Object, ObjectSection, SectionFlags, SectionKind};
 use rriscv::bus::DynBus;
 use rriscv::gdb::emu::{Emulator, StopReason};
 use rriscv::hart::Hart;
@@ -28,6 +24,9 @@ use rriscv::rtc::Rtc;
 use rriscv::uart::Uart8250;
 use rriscv::virtio::BlkDevice;
 use rriscv::{clint, dt, plic};
+use std::net::{TcpListener, TcpStream};
+use std::sync::Arc;
+use std::{env, fs};
 
 /// Event loop implementation for blocking GDB stub
 struct EmuEventLoop;
@@ -100,7 +99,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .appender(debug)
         // Silence gdbstub's "Unknown command" INFO messages
         .logger(Logger::builder().build("gdbstub", LevelFilter::Warn))
-        .build(Root::builder().appender("stdout").appender("riscv").build(LevelFilter::Info))?;
+        .build(
+            Root::builder()
+                .appender("stdout")
+                .appender("riscv")
+                .build(LevelFilter::Info),
+        )?;
 
     let _ = log4rs::init_config(config)?;
 
@@ -117,10 +121,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for section in elf.sections() {
         let name = section.name().expect("section name");
-        if name.contains("data") || name.contains("text") {
-            let start = section.address() as usize;
-            if let Ok(data) = section.uncompressed_data() {
-                ram.write(start - pc, data.to_vec());
+        let start = section.address() as usize;
+        let size = section.size() as usize;
+        if let SectionFlags::Elf { sh_flags: flags } = section.flags()
+            && (flags & object::elf::SHF_ALLOC as u64) > 0
+        {
+            match section.kind() {
+                SectionKind::Text
+                | SectionKind::Data
+                | SectionKind::ReadOnlyData
+                | SectionKind::ReadOnlyString
+                | SectionKind::Tls => {
+                    let data = section.uncompressed_data()?;
+                    info!(
+                        "Loading section '{}': addr=0x{:x}, size=0x{:x}, ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        data.len(),
+                        start - pc,
+                        flags
+                    );
+                    ram.write(start - pc, data.to_vec());
+                }
+                SectionKind::UninitializedData | SectionKind::UninitializedTls => {
+                    info!(
+                        "Zero-Initializing section '{}': addr=0x{:x}, size=0x{:x} ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        size,
+                        start - pc,
+                        flags
+                    );
+                }
+                _ => {}
             }
         }
     }
