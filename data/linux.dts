@@ -35,7 +35,7 @@
 			reg = <0x00>;
 			status = "okay";
 			compatible = "riscv";
-			riscv,isa = "rv64im";
+			riscv,isa = "rv64ima";
 
 			interrupt-controller {
 				#interrupt-cells = <0x01>;
