@@ -18,6 +18,7 @@ const MSIP_HART4095_ADDR: usize = 0x3FFC;
 pub const MTIME_ADDR: usize = 0xbff8;
 pub const MTIME_ADDRH: usize = 0xbffc;
 pub const MTIMECMP_ADDR: usize = 0x4000;
+pub const MTIMECMP_ADDRH: usize = 0x4004;
 
 pub const PLIC_EIP_ADDR: usize = 0x001000;
 
@@ -106,6 +107,7 @@ impl Device for Clint {
 
     fn read_double(&self, addr: usize) -> Result<u64, Interrupt> {
         match addr {
+            MTIMECMP_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIMECMP_ADDR),
             MTIME_ADDR => self.bus.read_double(self.rtc_addr + rtc::MTIME_ADDR),
             _ => {
                 trace!("reading double word from 0x{:x}", addr);
@@ -120,6 +122,8 @@ impl Device for Clint {
                 let _hartid = (addr - MSIP_HART0_ADDR) / 4; // XXX: should be per hart
                 Ok(self.msip.load(Ordering::Relaxed) as u32)
             }
+            MTIMECMP_ADDR => self.bus.read_word(self.rtc_addr + rtc::MTIMECMP_ADDR),
+            MTIMECMP_ADDRH => self.bus.read_word(self.rtc_addr + rtc::MTIMECMP_ADDRH),
             MTIME_ADDR => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDR),
             MTIME_ADDRH => self.bus.read_word(self.rtc_addr + rtc::MTIME_ADDRH),
             _ => {
@@ -203,6 +207,13 @@ pub(crate) fn interrupt(hart: &Hart) -> Option<u64> {
     if eip > 0 {
         mip |= 1 << InterruptType::MEIP as u64;
         mip |= 1 << InterruptType::SEIP as u64;
+    }
+
+    // Check timer interrupt: MTIME >= MTIMECMP
+    let mtime = hart.bus.read_double(CLINT_BASE + MTIME_ADDR).unwrap(); // XXX: bad.
+    let mtimecmp = hart.bus.read_double(CLINT_BASE + MTIMECMP_ADDR).unwrap(); // XXX: bad.
+    if mtime >= mtimecmp {
+        mip |= 1 << InterruptType::MTIP as u64;
     }
 
     pending_interrupt(mip, mie).map(|interrupt| {
