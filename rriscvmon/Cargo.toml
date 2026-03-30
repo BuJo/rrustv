@@ -1,0 +1,16 @@
+[package]
+name = "rriscvmon"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+harness = false
+
+[dependencies]
+
+# panic=abort avoids the unwinding machinery (and its relocations)
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
