@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Root::builder()
                 .appender("stdout")
                 .appender("riscv")
-                .build(LevelFilter::Info),
+                .build(LevelFilter::Debug),
         )?;
 
     let _ = log4rs::init_config(config)?;

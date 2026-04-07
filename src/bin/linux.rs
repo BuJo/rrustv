@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::{env, fs};
-
+use std::error::Error;
 use log::{error, info};
 use object::{Object, ObjectSection, SectionFlags, SectionKind};
 
@@ -22,53 +22,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let disk_file = args.get(2).expect("expect disc file");
 
     let bin_data = fs::read(image_file).expect("file");
-    let elf = object::File::parse(&*bin_data).expect("parsing");
 
     let bus = Arc::new(DynBus::new());
     let ram = Ram::sized(1024 * 1024 * 128);
-    let pc = elf.entry() as usize;
 
-    for section in elf.sections() {
-        let name = section.name().expect("section name");
-        let start = section.address() as usize;
-        let size = section.size() as usize;
-        if let SectionFlags::Elf { sh_flags: flags } = section.flags()
-            && (flags & object::elf::SHF_ALLOC as u64) > 0
-        {
-            match section.kind() {
-                SectionKind::Text
-                | SectionKind::Data
-                | SectionKind::ReadOnlyData
-                | SectionKind::ReadOnlyString
-                | SectionKind::Tls => {
-                    let data = section.uncompressed_data()?;
-                    info!(
-                        "Loading section '{}': addr=0x{:x}, size=0x{:x}, ram_offset=0x{:x} flags=0x{:x}",
-                        name,
-                        start,
-                        data.len(),
-                        start - pc,
-                        flags
-                    );
-                    ram.write(start - pc, data.to_vec());
-                }
-                SectionKind::UninitializedData | SectionKind::UninitializedTls => {
-                    info!(
-                        "Zero-Initializing section '{}': addr=0x{:x}, size=0x{:x} ram_offset=0x{:x} flags=0x{:x}",
-                        name,
-                        start,
-                        size,
-                        start - pc,
-                        flags
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
-
-    let s = ram.size();
-    bus.map(ram, pc..(pc + s));
+    let pc = load_elf_to_ram(bin_data, &bus, ram)?;
 
     // Add low ram
     let ram = Ram::sized(0x10000);
@@ -112,4 +70,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+}
+
+fn load_elf_to_ram(bin_data: Vec<u8>, bus: &Arc<DynBus>, ram: Ram) -> Result<usize, Box<dyn Error>> {
+    let elf = object::File::parse(&*bin_data).expect("parsing");
+    let pc = elf.entry() as usize;
+
+    for section in elf.sections() {
+        let name = section.name().expect("section name");
+        let start = section.address() as usize;
+        let size = section.size() as usize;
+        if let SectionFlags::Elf { sh_flags: flags } = section.flags()
+            && (flags & object::elf::SHF_ALLOC as u64) > 0
+        {
+            match section.kind() {
+                SectionKind::Text
+                | SectionKind::Data
+                | SectionKind::ReadOnlyData
+                | SectionKind::ReadOnlyString
+                | SectionKind::Tls => {
+                    let data = section.uncompressed_data()?;
+                    info!(
+                        "Loading section '{}': addr=0x{:x}, size=0x{:x}, ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        data.len(),
+                        start - pc,
+                        flags
+                    );
+                    ram.write(start - pc, data.to_vec());
+                }
+                SectionKind::UninitializedData | SectionKind::UninitializedTls => {
+                    info!(
+                        "Zero-Initializing section '{}': addr=0x{:x}, size=0x{:x} ram_offset=0x{:x} flags=0x{:x}",
+                        name,
+                        start,
+                        size,
+                        start - pc,
+                        flags
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let s = ram.size();
+    bus.map(ram, pc..(pc + s));
+    Ok(pc)
 }

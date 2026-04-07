@@ -9,6 +9,12 @@
 	chosen {
 		bootargs = "root=/dev/vda ro earlycon=uart8250,mmio,0x10000000,115200n8";
 		stdout-path = "/soc/serial@10000000";
+
+		opensbi-config {
+            compatible = "opensbi,config";
+            cold-boot-harts = <&cpu0>;
+            heap-size = <0x400000>;
+        };
 	};
 
 	platform-bus@4000000 {
@@ -21,7 +27,7 @@
 
 	memory@80000000 {
 		device_type = "memory";
-		reg = <0x00 0x80000000 0x00 0x00800000>;
+		reg = <0x00 0x80000000 0x00 0x08000000>;
 	};
 
 	cpus {
@@ -29,15 +35,15 @@
 		#size-cells = <0x00>;
 		timebase-frequency = <0x989680>;
 
-		cpu@0 {
+		cpu0: cpu@0 {
 			phandle = <0x01>;
 			device_type = "cpu";
 			reg = <0x00>;
 			status = "okay";
 			compatible = "riscv";
-			riscv,isa = "rv64ima";
+			riscv,isa = "rv64imac";
 
-			interrupt-controller {
+			cpu0_intc: interrupt-controller {
 				#interrupt-cells = <0x01>;
 				interrupt-controller;
 				compatible = "riscv,cpu-intc";
@@ -86,17 +92,17 @@
 			phandle = <0x03>;
 			riscv,ndev = <0x5f>;
 			reg = <0x00 0xc000000 0x00 0x600000>;
-			interrupts-extended = <0x02 0x0b 0x02 0x09>;
+			interrupts-extended = <&cpu0_intc 0x0b &cpu0_intc 0x09>;
 			interrupt-controller;
-			compatible = "sifive,plic-1.0.0\0riscv,plic0";
+			compatible = "sifive,plic-1.0.0", "riscv,plic0";
 			#address-cells = <0x00>;
 			#interrupt-cells = <0x01>;
 		};
 
 		clint@2000000 {
-			interrupts-extended = <0x02 0x03 0x02 0x07>;
+			interrupts-extended = <&cpu0_intc 0x03 &cpu0_intc 0x07>;
 			reg = <0x00 0x2000000 0x00 0x10000>;
-			compatible = "sifive,clint0\0riscv,clint0";
+			compatible = "sifive,clint0", "riscv,clint0";
 		};
 	};
 };

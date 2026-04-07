@@ -1,7 +1,7 @@
 use std::cmp;
 use std::sync::Arc;
 
-use log::{debug, trace};
+use log::{debug, info, trace};
 
 use crate::bus::DynBus;
 use crate::clint;
@@ -80,7 +80,7 @@ impl Hart {
                 }
             };
             self.pc = pc;
-            trace!(
+            info!(
                 "interrupt {:b}|{}: jumping to 0x{:x}",
                 cause >> 63,
                 (cause << 1) >> 1,
@@ -143,7 +143,7 @@ impl Hart {
             // 32-bit instruction
             0b11 => {
                 debug!(
-                    "[{}] [{:#x}] {:07b} Opcode for ins {:08x} {:032b}",
+                    "[{}] [{:#8x}] {:07b} Opcode for ins {:08x} {:032b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
                     ins & 0b11,
@@ -157,7 +157,7 @@ impl Hart {
             _ => {
                 let ins = self.bus.read_half(self.pc)?;
                 debug!(
-                    "[{}] [{:#x}] {:02b} Opcode for ins {:04x} {:016b}",
+                    "[{}] [{:#8x}]      {:02b} Opcode for ins     {:04x}                 {:016b}",
                     self.csr.read(csr::MHARTID),
                     self.pc,
                     ins & 0b11,
@@ -1383,8 +1383,6 @@ impl Hart {
                     // amoswap.w
                     0x01 => {
                         self.dbgins(ins, format!("amoswap.w\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
-                        let rdval = self.get_register(rd);
-                        self.set_register(rs2, rdval);
                         rs2val
                     }
                     // amoadd.w
@@ -1466,8 +1464,6 @@ impl Hart {
                     // amoswap.d
                     0x01 => {
                         self.dbgins(ins, format!("amoswap.d\t{},{},({})", reg(rd), reg(rs2), reg(rs1)));
-                        let rdval = self.get_register(rd);
-                        self.set_register(rs2, rdval);
                         rs2val
                     }
                     // amoadd.d

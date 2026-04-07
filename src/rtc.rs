@@ -1,8 +1,8 @@
-use std::sync::RwLock;
-use std::time::{Duration, Instant};
-
 use crate::device::Device;
 use crate::irq::Interrupt;
+use log::trace;
+use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 pub const MTIMECMP_ADDR: usize = 0x0;
 pub const MTIMECMP_ADDRH: usize = 0x4;
@@ -34,11 +34,7 @@ impl Default for Rtc {
 impl Device for Rtc {
     fn write_double(&self, addr: usize, val: u64) -> Result<(), Interrupt> {
         match addr {
-            MTIMECMP_ADDR => {
-                let mut v = self.mtimecmp.write().unwrap();
-                *v = Duration::from_nanos(val);
-                Ok(())
-            }
+            MTIMECMP_ADDR => self.set_mtimecmp(val),
             _ => Err(Interrupt::MemoryFault(addr)),
         }
     }
@@ -51,12 +47,9 @@ impl Device for Rtc {
                 Ok(())
             }
             MTIMECMP_ADDRH => {
-                let high = self.mtimecmptmp.write().unwrap();
+                let high = self.mtimecmptmp.read().unwrap();
                 let val = (*high & 0x0000_0000_FFFF_FFFF) | ((val as u64) << 32);
-
-                let mut mtimecmp = self.mtimecmp.write().unwrap();
-                *mtimecmp = Duration::from_nanos(val);
-                Ok(())
+                self.set_mtimecmp(val)
             }
             _ => Err(Interrupt::MemoryFault(addr)),
         }
@@ -100,5 +93,16 @@ impl Device for Rtc {
 
     fn read_byte(&self, addr: usize) -> Result<u8, Interrupt> {
         Err(Interrupt::Unaligned(addr))
+    }
+}
+
+impl Rtc {
+    fn set_mtimecmp(&self, mtimecmp: u64) -> Result<(), Interrupt> {
+        let mut v = self.mtimecmp.write().unwrap();
+        *v = Duration::from_nanos(mtimecmp);
+
+        trace!("Next interrupt: {:?}", v);
+
+        Ok(())
     }
 }
